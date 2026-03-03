@@ -9,6 +9,7 @@ const StudentDashboard = () => {
   const [activeTab, setActiveTab] = useState('rag-search');
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
+  const [generatedAnswer, setGeneratedAnswer] = useState('');
   const [searching, setSearching] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -65,6 +66,7 @@ const StudentDashboard = () => {
     try {
       const results = await ragAPI.search(searchQuery);
       setSearchResults(results.results || []);
+      setGeneratedAnswer(results.generated_answer || '');
     } catch (error) {
       console.error('Search error:', error);
     } finally {
@@ -275,21 +277,34 @@ const StudentDashboard = () => {
               </div>
 
               <div className="search-results">
-                {searchResults.length > 0 ? (
+                {generatedAnswer ? (
                   <>
-                    <h3>Search Results</h3>
-                    <div className="results-list">
-                      {searchResults.map((result, idx) => (
-                        <div key={idx} className="result-card">
-                          <div className="result-header">
-                            <span className="result-source">{result.source}</span>
-                            <span className="result-score">{Math.round(result.relevance_score * 100)}% match</span>
-                          </div>
-                          <p className="result-content">{result.content}</p>
-                          <span className="result-page">Page {result.page_number}</span>
-                        </div>
-                      ))}
+                    <div className="ai-answer-card">
+                      <div className="ai-answer-header">
+                        <span className="ai-icon">✨</span>
+                        <h3>AI Generated Answer</h3>
+                      </div>
+                      <div className="ai-answer-text">
+                        {generatedAnswer.split('\n').map((line, i) => (
+                          <p key={i}>{line}</p>
+                        ))}
+                      </div>
                     </div>
+
+                    {searchResults.length > 0 && (
+                      <div className="sources-section">
+                        <h4>📚 Sources — Where this answer came from</h4>
+                        <div className="sources-list">
+                          {searchResults.map((result, idx) => (
+                            <div key={idx} className="source-chip">
+                              <span className="source-name">📄 {result.source}</span>
+                              <span className="source-page">Page {result.page_number}</span>
+                              <span className="source-score">{Math.round(result.relevance_score * 100)}% match</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </>
                 ) : (
                   <>

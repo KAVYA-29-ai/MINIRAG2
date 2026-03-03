@@ -208,33 +208,49 @@ def _cosine_similarity(vector_a, vector_b):
 
 def _generate_rag_answer(client, user_query: str, retrieved_results: list):
     if not client or not retrieved_results:
-        return None
+        return "Could not generate an AI answer. Please check that your Gemini API key is configured."
 
     context_lines = []
-    for result in retrieved_results[:5]:
+    for idx, result in enumerate(retrieved_results[:5], 1):
+        source_name = result.get('source', 'Unknown')
+        page = result.get('page_number', 1)
         context_lines.append(
-            f"Source: {result['source']} | Page: {result.get('page_number', 1)}\nContent: {result['content']}"
+            f"[Source {idx}: {source_name}, Page {page}]\n{result['content']}"
         )
 
     prompt = (
-        "You are EduRag, an educational RAG assistant. "
-        "Answer only from the retrieved context. If context is insufficient, clearly say what is missing.\n\n"
-        f"User question: {user_query}\n\n"
-        "Retrieved context:\n"
+        "You are EduRag, an intelligent educational RAG (Retrieval-Augmented Generation) assistant.\n"
+        "Your job is to generate a clear, helpful, and well-structured answer based ONLY on the retrieved context below.\n"
+        "IMPORTANT RULES:\n"
+        "1. Synthesize the information into a coherent answer — do NOT just copy-paste chunks.\n"
+        "2. At the END of your answer, add a 'Sources:' section listing which sources you used "
+        "(e.g., 'Sources: Source 1 (filename.pdf, Page 3), Source 2 (filename.pdf, Page 7)').\n"
+        "3. If the context does not contain enough info, say so clearly.\n"
+        "4. Keep the answer educational, concise, and well-formatted.\n\n"
+        f"Student's Question: {user_query}\n\n"
+        "Retrieved Context:\n"
         + "\n\n".join(context_lines)
     )
 
-    try:
-        response = client.models.generate_content(model=GENERATION_MODEL, contents=prompt)
-        text = (response.text or "").strip()
-        return text if text else None
-    except Exception:
+    # Try primary model, then fallback
+    for model in [GENERATION_MODEL, GENERATION_MODEL_FALLBACK]:
         try:
-            response = client.models.generate_content(model=GENERATION_MODEL_FALLBACK, contents=prompt)
+            response = client.models.generate_content(model=model, contents=prompt)
             text = (response.text or "").strip()
-            return text if text else None
-        except Exception:
-            return None
+            if text:
+                return text
+        except Exception as e:
+            print(f"Generation failed with {model}: {e}")
+            continue
+
+    # If both models fail, construct a basic answer from chunks
+    fallback_text = f"Here is what I found about \"{user_query}\":\n\n"
+    for idx, result in enumerate(retrieved_results[:3], 1):
+        fallback_text += f"{idx}. {result['content'][:300]}...\n\n"
+    fallback_text += "Sources: " + ", ".join(
+        f"{r['source']} (Page {r.get('page_number', 1)})" for r in retrieved_results[:3]
+    )
+    return fallback_text
 
 @router.post("/search")
 async def search_documents(
@@ -311,15 +327,9 @@ async def search_documents(
                 })
 
         if not results:
-            results = [{
-                "id": 0,
-                "content": "No indexed PDFs found. Ask your teacher to upload course materials to enable RAG search.",
-                "source": "System",
-                "relevance_score": 1.0,
-                "page_number": 0,
-            }]
-
-        generated_answer = _generate_rag_answer(gemini_client, query.query, results)
+            generated_answer = f"No relevant results found for \"{query.query}\". The indexed PDFs may not contain information on this topic. Try a different query or ask your teacher to upload relevant course materials."
+        else:
+            generated_answer = _generate_rag_answer(gemini_client, query.query, results)
         response_time = int((time.time() - start_time) * 1000)
 
         # Log search history
