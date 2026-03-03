@@ -1,5 +1,26 @@
 // API Service Layer for EduRag
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
+
+// Dynamically determine API URL based on environment
+const getApiBaseUrl = () => {
+    // If environment variable is set, use it
+    if (process.env.REACT_APP_API_URL) {
+        return process.env.REACT_APP_API_URL;
+    }
+    
+    // If running in GitHub Codespaces, construct the backend URL
+    if (window.location.hostname.includes('.app.github.dev')) {
+        // Extract the codespace name and construct backend URL
+        const hostname = window.location.hostname;
+        // Replace port 3000 with 8000 in the URL
+        const backendHost = hostname.replace('-3000.', '-8000.');
+        return `https://${backendHost}/api`;
+    }
+    
+    // Default to localhost for local development
+    return 'http://localhost:8000/api';
+};
+
+const API_BASE_URL = getApiBaseUrl();
 
 // Token management
 const getToken = () => localStorage.getItem('edurag_token');
