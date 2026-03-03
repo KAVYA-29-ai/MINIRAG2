@@ -398,52 +398,52 @@ const StudentDashboard = () => {
                   <h3>Search Activity</h3>
                   <div className="metric">
                     <p className="metric-label">Total Searches</p>
-                    <p className="metric-value">47</p>
+                    <p className="metric-value">{searchHistory.length}</p>
                   </div>
-                  <p className="metric-description">This week</p>
+                  <p className="metric-description">Your recent searches</p>
                 </div>
 
                 <div className="analytics-card">
-                  <h3>Accuracy Score</h3>
+                  <h3>Study Buddies</h3>
                   <div className="metric">
-                    <p className="metric-label">Faithfulness</p>
-                    <p className="metric-value">92%</p>
+                    <p className="metric-label">Connected</p>
+                    <p className="metric-value">{buddies.length}</p>
                   </div>
-                  <p className="metric-description">Answer grounding score</p>
+                  <p className="metric-description">Fellow students</p>
                 </div>
 
                 <div className="analytics-card">
-                  <h3>Citations Used</h3>
+                  <h3>Your Profile</h3>
                   <div className="metric">
-                    <p className="metric-label">Verified Citations</p>
-                    <p className="metric-value">38</p>
+                    <p className="metric-label">Account Status</p>
+                    <p className="metric-value">{currentUser?.status || 'Active'}</p>
                   </div>
-                  <p className="metric-description">From your searches</p>
+                  <p className="metric-description">Member since joining</p>
                 </div>
 
                 <div className="analytics-card">
-                  <h3>Learning Time</h3>
+                  <h3>Role</h3>
                   <div className="metric">
-                    <p className="metric-label">Total Hours</p>
-                    <p className="metric-value">24h</p>
+                    <p className="metric-label">Access Level</p>
+                    <p className="metric-value">{currentUser?.role || 'Student'}</p>
                   </div>
-                  <p className="metric-description">This month</p>
+                  <p className="metric-description">Your account type</p>
                 </div>
               </div>
 
               <div className="insights-section">
-                <h3>Insights</h3>
+                <h3>Tips</h3>
                 <div className="insight-card">
-                  <span>📈</span>
-                  <p>You've been most active on weekdays between 2-4 PM</p>
+                  <span>💡</span>
+                  <p>Use RAG Search to find answers from your course materials</p>
                 </div>
                 <div className="insight-card">
-                  <span>⭐</span>
-                  <p>Your answer evaluation metrics show high consistency</p>
+                  <span>👥</span>
+                  <p>Connect with {buddies.length} other students in your class</p>
                 </div>
                 <div className="insight-card">
-                  <span>📚</span>
-                  <p>You're tracking well with course material</p>
+                  <span>📝</span>
+                  <p>Share anonymous feedback with your teachers anytime</p>
                 </div>
               </div>
             </section>

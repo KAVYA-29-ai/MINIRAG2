@@ -54,9 +54,7 @@ async def get_students(
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Get all students"""
-    if current_user.get("role") not in ["admin", "teacher"]:
-        raise HTTPException(status_code=403, detail="Insufficient permissions")
+    """Get all students - accessible by all authenticated users for buddies feature"""
     
     students = db.query(User).filter(User.role == "student").all()
     return [
