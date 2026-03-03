@@ -125,12 +125,12 @@ async def register(user_data: UserRegister, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/login", response_model=Token)
-async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+async def login(user_data: UserLogin, db: Session = Depends(get_db)):
     """Login user and return JWT token"""
     try:
-        # Get credentials from form data
-        institution_id = form_data.username
-        password = form_data.password
+        # Get credentials from JSON data
+        institution_id = user_data.institution_id
+        password = user_data.password
         
         # Check SQLite database
         user = db.query(User).filter(User.institution_id == institution_id).first()
