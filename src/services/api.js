@@ -286,6 +286,9 @@ export const studentFeedbackAPI = {
             body: JSON.stringify({ message, is_anonymous: isAnonymous }),
         });
     },
+    getAll: async () => {
+        return apiFetch('/student-feedback');
+    },
 };
 
 // ========================================

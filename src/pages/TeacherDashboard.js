@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import AnimatedBackground from '../components/AnimatedBackground';
-import { authAPI, ragAPI, usersAPI, feedbackAPI, analyticsAPI } from '../services/api';
+import { authAPI, ragAPI, usersAPI, feedbackAPI, studentFeedbackAPI, analyticsAPI } from '../services/api';
 import './TeacherDashboard.css';
 
 const TeacherDashboard = () => {
@@ -28,8 +28,9 @@ const TeacherDashboard = () => {
   
   // Feedback
   const [feedbackMessage, setFeedbackMessage] = useState('');
-  const [feedbackCategory, setFeedbackCategory] = useState('rag'); // eslint-disable-line no-unused-vars
+  const [feedbackCategory, setFeedbackCategory] = useState('rag');
   const [myFeedback, setMyFeedback] = useState([]);
+  const [studentFeedbackList, setStudentFeedbackList] = useState([]);
   
   // Analytics
   const [analytics, setAnalytics] = useState(null);
@@ -67,6 +68,7 @@ const TeacherDashboard = () => {
         analyticsAPI.getStudentInsights(),
         ragAPI.getPDFs(),
         ragAPI.getSearchHistory(),
+        studentFeedbackAPI.getAll(),
       ]);
 
       if (results[0].status === 'fulfilled') {
@@ -78,6 +80,7 @@ const TeacherDashboard = () => {
       if (results[3].status === 'fulfilled') setAnalytics(results[3].value);
       if (results[4].status === 'fulfilled') setPdfs(results[4].value || []);
       if (results[5].status === 'fulfilled') setSearchHistory(results[5].value || []);
+      if (results[6].status === 'fulfilled') setStudentFeedbackList(results[6].value || []);
     } catch (error) {
       console.error('Error loading data:', error);
     } finally {
@@ -226,6 +229,14 @@ const TeacherDashboard = () => {
           >
             <span className="nav-icon">💬</span>
             <span>Admin Feedback</span>
+          </button>
+
+          <button
+            className={`nav-item ${activeTab === 'student-feedback' ? 'active' : ''}`}
+            onClick={() => setActiveTab('student-feedback')}
+          >
+            <span className="nav-icon">📩</span>
+            <span>Student Feedback</span>
           </button>
         </nav>
 
@@ -639,12 +650,12 @@ const TeacherDashboard = () => {
 
                 <div className="form-group">
                   <label>Feedback Category</label>
-                  <select className="feedback-select">
-                    <option value="">Select category...</option>
+                  <select className="feedback-select" value={feedbackCategory} onChange={(e) => setFeedbackCategory(e.target.value)}>
                     <option value="system">System Issue</option>
                     <option value="feature">Feature Request</option>
                     <option value="content">Content Suggestion</option>
                     <option value="rag">RAG Improvement</option>
+                    <option value="student">Student Related</option>
                     <option value="other">Other</option>
                   </select>
                 </div>
@@ -681,6 +692,38 @@ const TeacherDashboard = () => {
                   ))
                 ) : (
                   <p className="no-data">No feedback sent yet. Your feedback history will appear here.</p>
+                )}
+              </div>
+            </section>
+          )}
+
+          {/* Student Feedback Tab */}
+          {activeTab === 'student-feedback' && (
+            <section className="tab-content">
+              <h2>📩 Student Feedback</h2>
+              <p className="section-desc">View feedback submitted by students (anonymous and identified)</p>
+
+              <div className="stats-row" style={{marginBottom: '1.5rem'}}>
+                <span className="stat-pill">📬 {studentFeedbackList.length} Total</span>
+                <span className="stat-pill student">🕵️ {studentFeedbackList.filter(f => f.is_anonymous).length} Anonymous</span>
+                <span className="stat-pill teacher">👤 {studentFeedbackList.filter(f => !f.is_anonymous).length} Identified</span>
+              </div>
+
+              <div className="feedback-history">
+                {studentFeedbackList.length > 0 ? (
+                  studentFeedbackList.map((fb, index) => (
+                    <div key={index} className="feedback-item">
+                      <div className="feedback-header">
+                        <span className="feedback-category">
+                          {fb.is_anonymous ? '🕵️ Anonymous' : `👤 Student #${fb.sender_id || 'Unknown'}`}
+                        </span>
+                        <span className="feedback-date">{new Date(fb.created_at).toLocaleDateString()}</span>
+                      </div>
+                      <p>{fb.message}</p>
+                    </div>
+                  ))
+                ) : (
+                  <p className="no-data">No student feedback received yet.</p>
                 )}
               </div>
             </section>

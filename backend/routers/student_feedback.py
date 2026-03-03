@@ -43,9 +43,9 @@ async def send_student_feedback(
 async def get_student_feedback(
     current_user: dict = Depends(get_current_user),
 ):
-    """Admins can view all student feedback."""
-    if current_user.get("role") != "admin":
-        raise HTTPException(status_code=403, detail="Only admins can view student feedback")
+    """Admins and teachers can view all student feedback."""
+    if current_user.get("role") not in ("admin", "teacher"):
+        raise HTTPException(status_code=403, detail="Only admins and teachers can view student feedback")
     try:
         sb = get_supabase()
         resp = (

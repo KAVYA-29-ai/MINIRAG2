@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import AnimatedBackground from '../components/AnimatedBackground';
-import { authAPI, usersAPI, feedbackAPI, analyticsAPI, ragAPI } from '../services/api';
+import { authAPI, usersAPI, feedbackAPI, studentFeedbackAPI, analyticsAPI, ragAPI } from '../services/api';
 import './AdminDashboard.css';
 
 const AdminDashboard = () => {
@@ -26,6 +26,7 @@ const AdminDashboard = () => {
   
   // Feedback from API
   const [teacherFeedback, setTeacherFeedback] = useState([]);
+  const [studentFeedbackList, setStudentFeedbackList] = useState([]);
   
   // Analytics from API
   const [analytics, setAnalytics] = useState(null);
@@ -58,6 +59,7 @@ const AdminDashboard = () => {
         feedbackAPI.getAll(),
         analyticsAPI.getSummary(),
         ragAPI.getPDFs(),
+        studentFeedbackAPI.getAll(),
       ]);
 
       if (results[0].status === 'fulfilled') setUsers(results[0].value || []);
@@ -71,6 +73,9 @@ const AdminDashboard = () => {
 
       if (results[3].status === 'fulfilled') setPdfs(results[3].value || []);
       else console.error('Error loading PDFs:', results[3].reason);
+
+      if (results[4].status === 'fulfilled') setStudentFeedbackList(results[4].value || []);
+      else console.error('Error loading student feedback:', results[4].reason);
     } catch (error) {
       console.error('Error loading data:', error);
     } finally {
@@ -218,6 +223,14 @@ const AdminDashboard = () => {
           >
             <span className="nav-icon">💬</span>
             <span>Teacher Feedback</span>
+          </button>
+
+          <button
+            className={`nav-item ${activeTab === 'student-feedback' ? 'active' : ''}`}
+            onClick={() => setActiveTab('student-feedback')}
+          >
+            <span className="nav-icon">📩</span>
+            <span>Student Feedback</span>
           </button>
 
           <button
@@ -487,6 +500,40 @@ const AdminDashboard = () => {
                   </div>
                 )) : (
                   <p className="no-data">No feedback received yet</p>
+                )}
+              </div>
+            </section>
+          )}
+
+          {/* Student Feedback Tab */}
+          {activeTab === 'student-feedback' && (
+            <section className="tab-content">
+              <h2>📩 Student Feedback</h2>
+              <p className="section-desc">View feedback submitted by students (anonymous and identified)</p>
+
+              <div className="stats-row">
+                <span className="stat-pill">📬 {studentFeedbackList.length} Total</span>
+                <span className="stat-pill student">🕵️ {studentFeedbackList.filter(f => f.is_anonymous).length} Anonymous</span>
+                <span className="stat-pill teacher">👤 {studentFeedbackList.filter(f => !f.is_anonymous).length} Identified</span>
+              </div>
+
+              <div className="feedback-list" style={{marginTop: '1.5rem'}}>
+                {studentFeedbackList.length > 0 ? (
+                  studentFeedbackList.map((fb, index) => (
+                    <div key={index} className="feedback-card">
+                      <div className="feedback-card-header">
+                        <div className="feedback-sender">
+                          <span className="sender-badge">
+                            {fb.is_anonymous ? '🕵️ Anonymous Student' : `👤 Student #${fb.sender_id || 'Unknown'}`}
+                          </span>
+                        </div>
+                        <span className="feedback-time">{new Date(fb.created_at).toLocaleDateString()}</span>
+                      </div>
+                      <p className="feedback-message">{fb.message}</p>
+                    </div>
+                  ))
+                ) : (
+                  <p className="no-data">No student feedback received yet</p>
                 )}
               </div>
             </section>
