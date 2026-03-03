@@ -101,10 +101,10 @@ async def get_current_user_profile(current_user: dict = Depends(get_current_user
 async def get_user(user_id: int, current_user: dict = Depends(get_current_user)):
     try:
         sb = get_supabase()
-        resp = sb.table("users").select("id, name, institution_id, email, role, avatar, status, created_at").eq("id", user_id).maybe_single().execute()
+        resp = sb.table("users").select("id, name, institution_id, email, role, avatar, status, created_at").eq("id", user_id).limit(1).execute()
         if not resp.data:
             raise HTTPException(status_code=404, detail="User not found")
-        return resp.data
+        return resp.data[0]
     except HTTPException:
         raise
     except Exception as e:

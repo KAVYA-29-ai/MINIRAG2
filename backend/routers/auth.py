@@ -56,8 +56,8 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
             raise HTTPException(status_code=401, detail="Invalid token")
 
         sb = get_supabase()
-        resp = sb.table("users").select("*").eq("id", user_id).maybe_single().execute()
-        user = resp.data
+        resp = sb.table("users").select("*").eq("id", user_id).limit(1).execute()
+        user = resp.data[0] if resp.data else None
         if user:
             return {
                 "id": user["id"],
@@ -98,8 +98,8 @@ async def register(user_data: UserRegister):
         sb = get_supabase()
 
         # Check duplicate institution_id
-        existing = sb.table("users").select("id").eq("institution_id", user_data.institution_id).maybe_single().execute()
-        if existing.data:
+        existing = sb.table("users").select("id").eq("institution_id", user_data.institution_id).limit(1).execute()
+        if existing.data and len(existing.data) > 0:
             raise HTTPException(status_code=400, detail="User with this Institution ID already exists")
 
         hashed_password = get_password_hash(user_data.password)
@@ -146,8 +146,8 @@ async def login(user_data: UserLogin):
     """Login — verify credentials against Supabase users table."""
     try:
         sb = get_supabase()
-        resp = sb.table("users").select("*").eq("institution_id", user_data.institution_id).maybe_single().execute()
-        user = resp.data
+        resp = sb.table("users").select("*").eq("institution_id", user_data.institution_id).limit(1).execute()
+        user = resp.data[0] if resp.data else None
 
         if not user:
             raise HTTPException(status_code=401, detail="Invalid credentials")

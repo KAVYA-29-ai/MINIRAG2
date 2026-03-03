@@ -459,8 +459,8 @@ async def delete_pdf(
         raise HTTPException(status_code=403, detail="Only teachers and admins can delete PDFs")
 
     sb = get_supabase()
-    resp = sb.table("pdfs").select("*").eq("id", pdf_id).maybe_single().execute()
-    pdf = resp.data
+    resp = sb.table("pdfs").select("*").eq("id", pdf_id).limit(1).execute()
+    pdf = resp.data[0] if resp.data else None
     if not pdf:
         raise HTTPException(status_code=404, detail="PDF not found")
 
@@ -489,8 +489,8 @@ async def index_pdf(
         raise HTTPException(status_code=403, detail="Only teachers and admins can index PDFs")
 
     sb = get_supabase()
-    resp = sb.table("pdfs").select("*").eq("id", pdf_id).maybe_single().execute()
-    pdf = resp.data
+    resp = sb.table("pdfs").select("*").eq("id", pdf_id).limit(1).execute()
+    pdf = resp.data[0] if resp.data else None
     if not pdf:
         raise HTTPException(status_code=404, detail="PDF not found")
 
@@ -611,17 +611,17 @@ async def get_pdf_detail(
 ):
     """Get PDF details with uploader info"""
     sb = get_supabase()
-    resp = sb.table("pdfs").select("*").eq("id", pdf_id).maybe_single().execute()
-    pdf = resp.data
+    resp = sb.table("pdfs").select("*").eq("id", pdf_id).limit(1).execute()
+    pdf = resp.data[0] if resp.data else None
     if not pdf:
         raise HTTPException(status_code=404, detail="PDF not found")
 
     uploader_name = "Unknown"
     if pdf.get("uploaded_by"):
         try:
-            u_resp = sb.table("users").select("name").eq("id", pdf["uploaded_by"]).maybe_single().execute()
+            u_resp = sb.table("users").select("name").eq("id", pdf["uploaded_by"]).limit(1).execute()
             if u_resp.data:
-                uploader_name = u_resp.data["name"]
+                uploader_name = u_resp.data[0]["name"]
         except Exception:
             pass
 
