@@ -22,10 +22,16 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# CORS configuration - Allow all origins for Codespaces compatibility
+# CORS configuration - Allow Vercel frontend + dev origins + Codespaces
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+    ],
+    allow_origin_regex=r"https://.*(\.vercel\.app|\.app\.github\.dev|\.preview\.app\.github\.dev)",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -37,7 +37,6 @@ const LoginRegister = () => {
         const response = await authAPI.login(formData.institutionId, formData.password);
         const user = response.user;
         
-        // Navigate based on role
         if (user.role === 'admin') {
           navigate('/admin-dashboard');
         } else if (user.role === 'teacher') {
@@ -66,7 +65,6 @@ const LoginRegister = () => {
           role: 'student'
         });
 
-        // Auto-login after register
         const user = response.user;
         if (user.role === 'admin') {
           navigate('/admin-dashboard');
