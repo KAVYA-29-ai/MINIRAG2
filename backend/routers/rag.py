@@ -252,6 +252,9 @@ async def search_documents(
         results = []
         query_vector = _embed_text(gemini_client, query.query)
 
+        # Minimum cosine similarity threshold — below this, results are noise
+        SIMILARITY_THRESHOLD = 0.65
+
         if query_vector:
             # Fetch all embeddings with their chunk content via join-like approach
             emb_rows = sb.table("rag_embeddings").select("id, pdf_chunk_id, modality, embedding_json").execute().data or []
@@ -275,7 +278,8 @@ async def search_documents(
                 except Exception:
                     similarity = 0.0
 
-                if similarity > 0:
+                # Only keep results above the threshold
+                if similarity >= SIMILARITY_THRESHOLD:
                     if emb.get("modality") == "multimodal":
                         used_multimodal = True
                     chunk = chunk_map.get(emb["pdf_chunk_id"])
@@ -294,7 +298,7 @@ async def search_documents(
             if results:
                 retrieval_mode = "semantic"
 
-        # Keyword fallback
+        # Keyword fallback — only if semantic found nothing above threshold
         if not results:
             kw_resp = sb.table("pdf_chunks").select("id, content, source_file, page_number").ilike("content", f"%{query.query}%").limit(5).execute()
             for idx, chunk in enumerate(kw_resp.data or []):
