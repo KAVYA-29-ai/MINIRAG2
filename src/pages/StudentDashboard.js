@@ -421,15 +421,15 @@ const StudentDashboard = () => {
                 </div>
 
                 <div className="form-group">
-                  <label>Show your name to teacher/admin?</label>
+                  <label>Send anonymously?</label>
                   <div className="toggle-switch">
                     <input 
                       type="checkbox" 
                       id="identity-toggle" 
-                      checked={!isAnonymous}
-                      onChange={(e) => setIsAnonymous(!e.target.checked)}
+                      checked={isAnonymous}
+                      onChange={(e) => setIsAnonymous(e.target.checked)}
                     />
-                    <label htmlFor="identity-toggle">{!isAnonymous ? 'Show my name' : 'Send anonymously'}</label>
+                    <label htmlFor="identity-toggle">{isAnonymous ? 'Send anonymously' : 'Show my name'}</label>
                     <span className="toggle-slider"></span>
                   </div>
                 </div>
@@ -457,7 +457,12 @@ const StudentDashboard = () => {
           {activeTab === 'analysis' && (
             <section className="tab-content analysis-section">
               <h2>Learning Analytics</h2>
-              <div className="analytics-grid">
+              {(!searchHistory || searchHistory.length === 0) ? (
+                <div className="no-data">
+                  <p>No analytics data available yet. Start searching, connecting with buddies, or sending feedback to see your learning stats here!</p>
+                </div>
+              ) : (
+                <div className="analytics-grid">
                 <div className="analytics-card">
                   <h3>Search Activity</h3>
                   <div className="metric">
