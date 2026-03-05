@@ -421,15 +421,15 @@ const StudentDashboard = () => {
                 </div>
 
                 <div className="form-group">
-                  <label>Send as Anonymous?</label>
+                  <label>Show your name to teacher/admin?</label>
                   <div className="toggle-switch">
                     <input 
                       type="checkbox" 
                       id="identity-toggle" 
-                      checked={isAnonymous}
-                      onChange={(e) => setIsAnonymous(e.target.checked)}
+                      checked={!isAnonymous}
+                      onChange={(e) => setIsAnonymous(!e.target.checked)}
                     />
-                    <label htmlFor="identity-toggle">{isAnonymous ? 'Anonymous' : 'With Name'}</label>
+                    <label htmlFor="identity-toggle">{!isAnonymous ? 'Show my name' : 'Send anonymously'}</label>
                     <span className="toggle-slider"></span>
                   </div>
                 </div>
