@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import AnimatedBackground from '../components/AnimatedBackground';
 import { authAPI, ragAPI, usersAPI, studentFeedbackAPI } from '../services/api';
+import { handleError } from '../services/errorHandler';
 import './StudentDashboard.css';
 
 const StudentDashboard = () => {
@@ -25,6 +26,7 @@ const StudentDashboard = () => {
   
   // Buddies from API
   const [buddies, setBuddies] = useState([]);
+  const [buddySearch, setBuddySearch] = useState("");
   
   // Search history
   const [searchHistory, setSearchHistory] = useState([]);
@@ -239,7 +241,7 @@ const StudentDashboard = () => {
                     setUserName(editName);
                     setCurrentUser({ ...currentUser, name: editName, avatar: selectedAvatar });
                   } catch (err) {
-                    alert('Failed to update profile');
+                    handleError(err, 'Failed to update profile');
                   }
                   setShowProfileModal(false);
                 }}
@@ -269,6 +271,8 @@ const StudentDashboard = () => {
               type="text"
               placeholder="Quick search..."
               className="search-input"
+              value={buddySearch}
+              onChange={e => setBuddySearch(e.target.value)}
             />
             <button className="help-btn" title="Help">
               ?
@@ -368,7 +372,21 @@ const StudentDashboard = () => {
             <section className="tab-content buddies-section">
               <h2>Student Buddies</h2>
               <div className="buddies-grid">
-                {buddies.length > 0 ? buddies.map((buddy) => (
+                {buddies.filter(buddy => {
+                  if (!buddySearch.trim()) return true;
+                  const q = buddySearch.trim().toLowerCase();
+                  return (
+                    buddy.name.toLowerCase().includes(q) ||
+                    buddy.institution_id.toLowerCase().includes(q)
+                  );
+                }).length > 0 ? buddies.filter(buddy => {
+                  if (!buddySearch.trim()) return true;
+                  const q = buddySearch.trim().toLowerCase();
+                  return (
+                    buddy.name.toLowerCase().includes(q) ||
+                    buddy.institution_id.toLowerCase().includes(q)
+                  );
+                }).map((buddy) => (
                   <div key={buddy.id} className="buddy-card">
                     <img 
                       src={getAvatarSrc(buddy.avatar)}

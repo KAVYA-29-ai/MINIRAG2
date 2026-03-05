@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import AnimatedBackground from '../components/AnimatedBackground';
 import { authAPI, usersAPI, feedbackAPI, studentFeedbackAPI, analyticsAPI, ragAPI } from '../services/api';
+import { handleError } from '../services/errorHandler';
 import './AdminDashboard.css';
 
 const AdminDashboard = () => {
@@ -153,8 +154,18 @@ const AdminDashboard = () => {
   };
 
   const filteredUsers = users.filter(user => {
-    if (userFilter === 'all') return true;
-    return user.role === userFilter;
+    // Filter by role
+    if (userFilter !== 'all' && user.role !== userFilter) return false;
+    // Filter by search query
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase();
+      return (
+        user.name.toLowerCase().includes(q) ||
+        user.institution_id.toLowerCase().includes(q) ||
+        (user.email && user.email.toLowerCase().includes(q))
+      );
+    }
+    return true;
   });
 
   const handleUploadPDF = async (e) => {
@@ -349,7 +360,7 @@ const AdminDashboard = () => {
                     setUserName(editName);
                     setCurrentUser({ ...currentUser, name: editName, avatar: selectedAvatar });
                   } catch (err) {
-                    alert('Failed to update profile');
+                    handleError(err, 'Failed to update profile');
                   }
                   setShowProfileModal(false);
                 }}
@@ -379,6 +390,8 @@ const AdminDashboard = () => {
               type="text"
               placeholder="Quick search..."
               className="search-input"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
             />
             <button className="help-btn" title="Help">?</button>
           </div>

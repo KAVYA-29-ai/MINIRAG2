@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import AnimatedBackground from '../components/AnimatedBackground';
 import { authAPI, ragAPI, usersAPI, feedbackAPI, studentFeedbackAPI, analyticsAPI } from '../services/api';
+import { handleError } from '../services/errorHandler';
 import './TeacherDashboard.css';
 
 const TeacherDashboard = () => {
@@ -25,6 +26,7 @@ const TeacherDashboard = () => {
   
   // Teachers from API
   const [teachers, setTeachers] = useState([]);
+  const [teacherSearch, setTeacherSearch] = useState("");
   
   // Student analysis from API
   const [studentProblems, setStudentProblems] = useState([]);
@@ -331,7 +333,7 @@ const TeacherDashboard = () => {
                     setUserName(editName);
                     setCurrentUser({ ...currentUser, name: editName, avatar: selectedAvatar });
                   } catch (err) {
-                    alert('Failed to update profile');
+                    handleError(err, 'Failed to update profile');
                   }
                   setShowProfileModal(false);
                 }}
@@ -361,6 +363,8 @@ const TeacherDashboard = () => {
               type="text"
               placeholder="Quick search..."
               className="search-input"
+              value={teacherSearch}
+              onChange={e => setTeacherSearch(e.target.value)}
             />
             <button className="help-btn" title="Help">?</button>
           </div>
@@ -550,7 +554,21 @@ const TeacherDashboard = () => {
               <p className="section-desc">View other teachers in your institution</p>
               
               <div className="teachers-grid">
-                {teachers.length > 0 ? teachers.map((teacher) => (
+                {teachers.filter(teacher => {
+                  if (!teacherSearch.trim()) return true;
+                  const q = teacherSearch.trim().toLowerCase();
+                  return (
+                    teacher.name.toLowerCase().includes(q) ||
+                    teacher.institution_id.toLowerCase().includes(q)
+                  );
+                }).length > 0 ? teachers.filter(teacher => {
+                  if (!teacherSearch.trim()) return true;
+                  const q = teacherSearch.trim().toLowerCase();
+                  return (
+                    teacher.name.toLowerCase().includes(q) ||
+                    teacher.institution_id.toLowerCase().includes(q)
+                  );
+                }).map((teacher) => (
                   <div key={teacher.id} className="teacher-card">
                     <img 
                       src={getAvatarSrc(teacher.avatar)}
