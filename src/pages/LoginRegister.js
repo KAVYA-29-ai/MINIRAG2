@@ -20,6 +20,13 @@ const LoginRegister = () => {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
+    // Institution ID: only allow numbers
+    if (name === 'institutionId') {
+      if (!/^\d*$/.test(value)) {
+        setError('Institution ID must be numeric');
+        return;
+      }
+    }
     setFormData(prev => ({
       ...prev,
       [name]: value
@@ -45,6 +52,11 @@ const LoginRegister = () => {
           navigate('/dashboard');
         }
       } else {
+        if (!/^\d+$/.test(formData.institutionId)) {
+          setError('Institution ID must be numeric');
+          setLoading(false);
+          return;
+        }
         if (formData.email !== formData.confirmEmail) {
           setError('Email addresses do not match');
           setLoading(false);
@@ -55,7 +67,6 @@ const LoginRegister = () => {
           setLoading(false);
           return;
         }
-        
         const response = await authAPI.register({
           name: formData.name,
           institution_id: formData.institutionId,
@@ -64,7 +75,6 @@ const LoginRegister = () => {
           avatar: 'male',
           role: 'student'
         });
-
         const user = response.user;
         if (user.role === 'admin') {
           navigate('/admin-dashboard');
