@@ -306,7 +306,7 @@ GEMINI_API_KEY=your-gemini-api-key
 # 👥 Project Team
 🧑‍💻 Team Leader
 
-Khushi Sara
+Khushi Saraswat
 
 GitHub: https://github.com/khushisara1
 
