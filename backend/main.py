@@ -15,7 +15,7 @@ from pathlib import Path
 load_dotenv()
 
 # Import routers
-from routers import auth, users, feedback, student_feedback, rag, analytics, chat
+from .routers import auth, users, feedback, student_feedback, rag, analytics, chat
 
 # Create FastAPI app
 app = FastAPI(
