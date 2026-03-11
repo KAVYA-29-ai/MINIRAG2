@@ -9,22 +9,32 @@ on:
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+    
+    env:
+      PYTHONPATH: ${{ github.workspace }}/backend
+      GEMINI_API_KEY: test_key
+      JWT_SECRET: test_secret
+      SUPABASE_URL: http://localhost
+      SUPABASE_KEY: test_key
+      JWT_ALGORITHM: HS256
+
     steps:
       - uses: actions/checkout@v3
+
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.11'
-      - name: Set PYTHONPATH
-        run: export PYTHONPATH=$PYTHONPATH:$(pwd)/backend
+
       - name: Install dependencies
         run: |
           pip install -r backend/requirements.txt
-          pip install pytest
+          pip install pytest pytest-asyncio httpx
+
       - name: Run tests
-        run: |
-          pytest tests/
+        run: pytest tests/ -v
+
       - name: Lint code
         run: |
           pip install flake8
-          flake8 backend/
+          flake8 backend/ --max-line-length=120
