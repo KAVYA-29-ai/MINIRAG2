@@ -1,7 +1,8 @@
 """
 Database Configuration — 100% Supabase (no local SQLite)
-All tables (users, feedback, search_history, analytics, pdfs, pdf_chunks,
-rag_embeddings) live in Supabase PostgreSQL.
+
+All tables (users, feedback, search_history, analytics, pdfs, pdf_chunks, rag_embeddings) live in Supabase PostgreSQL.
+This module provides Supabase client initialization and access helpers.
 """
 import os
 from dotenv import load_dotenv
@@ -20,7 +21,10 @@ supabase_admin = None  # service-role client (bypasses RLS)
 
 
 def init_supabase():
-    """Create Supabase clients. The service-role client is used everywhere."""
+    """
+    Create Supabase clients. The service-role client is used everywhere.
+    Initializes both anon and service-role clients for Supabase.
+    """
     global supabase, supabase_admin
     url = SUPABASE_URL
     key = SUPABASE_KEY
@@ -39,7 +43,9 @@ def init_supabase():
 
 
 def get_supabase():
-    """Return the service-role Supabase client (or raise)."""
+    """
+    Return the service-role Supabase client (or raise an error if not configured).
+    """
     if supabase_admin is None:
         raise RuntimeError(
             "Supabase is not configured. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in .env"

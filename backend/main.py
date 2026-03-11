@@ -1,5 +1,7 @@
 """
 EduRag Backend - FastAPI with Supabase
+
+This is the main entry point for the EduRag backend API, which provides endpoints for authentication, user management, feedback, RAG search, analytics, and chat. All data is stored in Supabase.
 """
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware

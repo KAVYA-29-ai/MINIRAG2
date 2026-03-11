@@ -17,6 +17,10 @@ async def create_feedback(
     feedback_data: FeedbackCreate,
     current_user: dict = Depends(get_current_user),
 ):
+    """
+    Create a new feedback entry in Supabase. Only teachers can submit feedback.
+    Returns the created feedback object.
+    """
     if current_user.get("role") != "teacher":
         raise HTTPException(status_code=403, detail="Only teachers can submit feedback")
     try:
@@ -36,6 +40,10 @@ async def create_feedback(
 
 @router.get("/mine")
 async def get_my_feedback(current_user: dict = Depends(get_current_user)):
+    """
+    Retrieve all feedback submitted by the current user.
+    Returns a list of feedback entries.
+    """
     try:
         sb = get_supabase()
         resp = (
@@ -55,6 +63,10 @@ async def get_all_feedback(
     status: Optional[str] = None,
     current_user: dict = Depends(get_current_user),
 ):
+    """
+    Retrieve all feedback entries, optionally filtered by status. Only admins can view all feedback.
+    Returns a list of feedback entries.
+    """
     if current_user.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Only admins can view all feedback")
     try:

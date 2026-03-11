@@ -35,6 +35,10 @@ def _get_gemini_client():
         return genai.Client(api_key=api_key)
     except Exception:
         return None
+    """
+    Initialize and return a Gemini API client using the API key from environment variables.
+    Returns None if the API key is not set or the client cannot be created.
+    """
 
 
 def _safe_mime_type(image_bytes: bytes) -> str:
@@ -45,10 +49,16 @@ def _safe_mime_type(image_bytes: bytes) -> str:
     if image_bytes.startswith(b"GIF8"):
         return "image/gif"
     return "application/octet-stream"
+    """
+    Detect the MIME type of image bytes (JPEG, PNG, GIF) or return octet-stream as fallback.
+    """
 
 
 def _extract_text_and_images_from_pdf(pdf_path: str):
-    """Extract text and images from a local PDF file path."""
+    """
+    Extract text and images from a local PDF file path.
+    Returns a list of pages, each with text and images, and the total number of pages.
+    """
     pages = []
     try:
         from pypdf import PdfReader
@@ -76,7 +86,10 @@ def _extract_text_and_images_from_pdf(pdf_path: str):
 
 
 def _download_pdf_from_storage(sb, storage_path: str) -> str:
-    """Download a PDF from Supabase Storage to a temp file. Returns temp path."""
+    """
+    Download a PDF from Supabase Storage to a temporary file.
+    Returns the temporary file path.
+    """
     data = sb.storage.from_(STORAGE_BUCKET).download(storage_path)
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
     tmp.write(data)
@@ -85,7 +98,9 @@ def _download_pdf_from_storage(sb, storage_path: str) -> str:
 
 
 def _ensure_storage_bucket(sb):
-    """Create the storage bucket if it doesn't exist."""
+    """
+    Ensure the Supabase storage bucket exists; create it if it does not.
+    """
     try:
         sb.storage.get_bucket(STORAGE_BUCKET)
     except Exception:
@@ -96,6 +111,10 @@ def _ensure_storage_bucket(sb):
 
 
 def _embed_text(client, text: str):
+        """
+        Generate an embedding vector for the given text using the Gemini client.
+        Returns the embedding vector or None if embedding fails.
+        """
     if not client or not text.strip():
         return None
     try:
@@ -113,6 +132,10 @@ def _embed_text(client, text: str):
 
 
 def _try_multimodal_embed(client, image_bytes: bytes, page_text: str):
+        """
+        Generate a multimodal embedding for an image and its associated page text using Gemini.
+        Returns the embedding vector or None if not available.
+        """
     if not client or not MULTIMODAL_EMBEDDING_MODEL:
         return None
     try:
@@ -141,6 +164,10 @@ def _try_multimodal_embed(client, image_bytes: bytes, page_text: str):
 
 
 def _caption_image_with_gemini(client, image_bytes: bytes):
+        """
+        Generate a factual caption for an image using Gemini models.
+        Returns the caption string or an empty string if generation fails.
+        """
     if not client:
         return ""
     mime_type = _safe_mime_type(image_bytes)
@@ -176,6 +203,10 @@ def _caption_image_with_gemini(client, image_bytes: bytes):
 
 
 def _chunk_text(raw_text: str, chunk_size: int = 900, overlap: int = 120):
+        """
+        Split raw text into overlapping chunks for embedding and retrieval.
+        Returns a list of text chunks.
+        """
     normalized = " ".join(raw_text.split())
     if not normalized:
         return []
@@ -195,6 +226,10 @@ def _chunk_text(raw_text: str, chunk_size: int = 900, overlap: int = 120):
 
 
 def _cosine_similarity(vector_a, vector_b):
+        """
+        Compute the cosine similarity between two vectors.
+        Returns a float between 0.0 and 1.0.
+        """
     if not vector_a or not vector_b or len(vector_a) != len(vector_b):
         return 0.0
 
@@ -207,6 +242,10 @@ def _cosine_similarity(vector_a, vector_b):
 
 
 def _generate_rag_answer(client, user_query: str, retrieved_results: list):
+        """
+        Generate an answer to the user query using retrieved context and Gemini models.
+        Returns the generated answer as a string.
+        """
     if not client or not retrieved_results:
         return "Could not generate an AI answer. Please check that your Gemini API key is configured."
 
@@ -257,7 +296,10 @@ async def search_documents(
     query: RAGQuery,
     current_user: dict = Depends(get_current_user),
 ):
-    """Search documents using RAG — all data from Supabase"""
+    """
+    Search documents using Retrieval-Augmented Generation (RAG) from Supabase.
+    Returns relevant results and a generated answer.
+    """
     start_time = time.time()
     gemini_client = _get_gemini_client()
     retrieval_mode = "keyword"
@@ -362,7 +404,10 @@ async def upload_pdf(
     file: UploadFile = File(...),
     current_user: dict = Depends(get_current_user),
 ):
-    """Upload a PDF to Supabase Storage (Teacher/Admin only)"""
+    """
+    Upload a PDF file to Supabase Storage (Teacher/Admin only).
+    Returns the uploaded PDF's metadata.
+    """
     if current_user.get("role") not in ["teacher", "admin"]:
         raise HTTPException(status_code=403, detail="Only teachers and admins can upload PDFs")
 
@@ -409,7 +454,9 @@ async def upload_pdf(
 async def list_pdfs(
     current_user: dict = Depends(get_current_user),
 ):
-    """List all uploaded PDFs"""
+    """
+    List all uploaded PDFs with their metadata.
+    """
     sb = get_supabase()
     resp = sb.table("pdfs").select("*").order("created_at", desc=True).execute()
     return [
@@ -430,7 +477,9 @@ async def get_search_history(
     limit: int = 10,
     current_user: dict = Depends(get_current_user),
 ):
-    """Get user's search history from Supabase"""
+    """
+    Get the current user's search history from Supabase.
+    """
     try:
         sb = get_supabase()
         resp = (
@@ -449,7 +498,10 @@ async def get_search_history(
 async def get_trending_topics(
     current_user: dict = Depends(get_current_user),
 ):
-    """Get trending search topics from Supabase"""
+    """
+    Get trending search topics from Supabase search history.
+    Returns a list of topics with their popularity.
+    """
     try:
         sb = get_supabase()
         rows = sb.table("search_history").select("query").execute().data or []
@@ -468,7 +520,9 @@ async def delete_pdf(
     pdf_id: int,
     current_user: dict = Depends(get_current_user),
 ):
-    """Delete a PDF from Supabase Storage + DB (Teacher/Admin only)"""
+    """
+    Delete a PDF from Supabase Storage and database (Teacher/Admin only).
+    """
     if current_user.get("role") not in ["teacher", "admin"]:
         raise HTTPException(status_code=403, detail="Only teachers and admins can delete PDFs")
 
@@ -498,7 +552,10 @@ async def index_pdf(
     pdf_id: int,
     current_user: dict = Depends(get_current_user),
 ):
-    """Index a PDF — download from Supabase Storage, extract text/images, create chunks"""
+    """
+    Index a PDF: download from Supabase Storage, extract text/images, create chunks and embeddings.
+    Only teachers and admins can perform this action.
+    """
     if current_user.get("role") not in ["teacher", "admin"]:
         raise HTTPException(status_code=403, detail="Only teachers and admins can index PDFs")
 
@@ -623,7 +680,9 @@ async def get_pdf_detail(
     pdf_id: int,
     current_user: dict = Depends(get_current_user),
 ):
-    """Get PDF details with uploader info"""
+    """
+    Get details of a specific PDF, including uploader information.
+    """
     sb = get_supabase()
     resp = sb.table("pdfs").select("*").eq("id", pdf_id).limit(1).execute()
     pdf = resp.data[0] if resp.data else None

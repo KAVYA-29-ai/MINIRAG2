@@ -29,10 +29,18 @@ ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60")
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
+        """
+        Verify a plain password against its hashed version.
+        Returns True if the password matches, False otherwise.
+        """
 
 
 def get_password_hash(password: str) -> str:
     return pwd_context.hash(password)
+        """
+        Hash a plain password using bcrypt.
+        Returns the hashed password string.
+        """
 
 
 def create_access_token(data: dict, expires_delta: timedelta = None) -> str:
@@ -40,6 +48,10 @@ def create_access_token(data: dict, expires_delta: timedelta = None) -> str:
     expire = datetime.utcnow() + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, JWT_SECRET, algorithm=JWT_ALGORITHM)
+        """
+        Create a JWT access token with the given data and expiration delta.
+        Returns the encoded JWT token as a string.
+        """
 
 
 # ---------------------------------------------------------------------------
@@ -77,6 +89,10 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         }
     except JWTError:
         raise HTTPException(status_code=401, detail="Invalid token")
+        """
+        Decode JWT and fetch the user row from Supabase.
+        Returns the user dictionary or raises HTTPException if invalid.
+        """
 
 
 async def require_role(allowed_roles: list):
@@ -85,6 +101,10 @@ async def require_role(allowed_roles: list):
             raise HTTPException(status_code=403, detail="Insufficient permissions")
         return user
     return check_role
+        """
+        Dependency generator to require a user to have one of the allowed roles.
+        Returns a dependency function for FastAPI routes.
+        """
 
 
 # ---------------------------------------------------------------------------
@@ -92,8 +112,11 @@ async def require_role(allowed_roles: list):
 # ---------------------------------------------------------------------------
 
 @router.post("/register", response_model=Token)
+"""
+Register a new user and store their data in Supabase.
+Returns a JWT token and user info on success.
+"""
 async def register(user_data: UserRegister):
-    """Register a new user (stored in Supabase)."""
     try:
         sb = get_supabase()
 
@@ -142,8 +165,11 @@ async def register(user_data: UserRegister):
 
 
 @router.post("/login", response_model=Token)
+"""
+Login a user by verifying credentials against the Supabase users table.
+Returns a JWT token and user info on success.
+"""
 async def login(user_data: UserLogin):
-    """Login — verify credentials against Supabase users table."""
     try:
         sb = get_supabase()
         resp = sb.table("users").select("*").eq("institution_id", user_data.institution_id).limit(1).execute()
@@ -180,10 +206,16 @@ async def login(user_data: UserLogin):
 
 
 @router.get("/me")
+"""
+Get the current authenticated user's information.
+"""
 async def get_me(current_user: dict = Depends(get_current_user)):
     return current_user
 
 
 @router.post("/logout")
+"""
+Logout endpoint (stateless, for client-side token removal).
+"""
 async def logout():
     return {"message": "Logged out successfully"}

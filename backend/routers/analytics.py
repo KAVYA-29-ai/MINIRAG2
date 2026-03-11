@@ -12,6 +12,11 @@ router = APIRouter()
 
 @router.get("/summary")
 async def get_system_summary(current_user: dict = Depends(get_current_user)):
+    """
+    Get a summary of system analytics including users, searches, PDFs, and feedback.
+    Only admins can view analytics.
+    Returns a summary dictionary.
+    """
     if current_user.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Only admins can view analytics")
     try:
@@ -44,6 +49,10 @@ async def get_system_summary(current_user: dict = Depends(get_current_user)):
 
 @router.get("/usage-by-role")
 async def get_usage_by_role(current_user: dict = Depends(get_current_user)):
+    """
+    Get usage analytics grouped by user role. Only admins can view analytics.
+    Returns a list of usage counts by role.
+    """
     if current_user.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Only admins can view analytics")
     try:

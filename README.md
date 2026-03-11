@@ -12,9 +12,32 @@
   <img src="https://img.shields.io/badge/Gemini_AI-Multimodal-8E75B2?style=for-the-badge&logo=google&logoColor=white" alt="Gemini" />
   <img src="https://img.shields.io/badge/Supabase-100%25-3ECF8E?style=for-the-badge&logo=supabase&logoColor=white" alt="Supabase" />
   <img src="https://img.shields.io/badge/Vercel-Deployed-000000?style=for-the-badge&logo=vercel&logoColor=white" alt="Vercel" />
+  <img src="https://img.shields.io/github/workflow/status/KAVYA-29-ai/MINIRAG2/CI?label=build&style=for-the-badge" alt="Build Status" />
+  <img src="https://img.shields.io/github/license/KAVYA-29-ai/MINIRAG2?style=for-the-badge" alt="License" />
 </p>
 
 </div>
+
+---
+
+<div align="center">
+  <img src="docs/screenshots/dashboard.png" alt="EduRag Dashboard Screenshot" width="700"/>
+</div>
+
+---
+
+## ⚙️ How it works
+
+1. **User Authentication:**
+   - Users register/login with institution ID and password. JWT tokens are issued for secure access.
+2. **PDF Upload & Indexing:**
+   - Teachers/Admins upload PDFs. Text and images are extracted, chunked, and embedded using Gemini AI. All data is stored in Supabase.
+3. **RAG Search:**
+   - Students/Teachers/Admins can ask questions. The system finds relevant chunks using vector similarity and generates an answer with source citations using Gemini.
+4. **Feedback & Analytics:**
+   - Teachers submit feedback to admins. Analytics dashboards show usage, trending topics, and engagement.
+
+See the [docs/SETUP.md](docs/SETUP.md) for local setup and [docs/API.md](docs/API.md) for API reference.
 
 ---
 
