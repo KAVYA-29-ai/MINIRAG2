@@ -19,22 +19,22 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install pytest pytest-cov httpx
-          pip install -r requirements.txt || pip install -r backend/requirements.txt || true
+          pip install pytest pytest-cov httpx fastapi uvicorn pydantic python-jose passlib
+          pip install -r requirements.txt || true
 
       - name: Run tests with coverage
         run: |
-          cd backend
-          pytest tests/ --cov=. --cov-report=xml --cov-report=term-missing -v
+          python -m pytest tests/ --cov=backend --cov-report=xml --cov-report=term-missing -v
         env:
           JWT_SECRET: test-secret-key-for-ci
           SUPABASE_URL: https://placeholder.supabase.co
           SUPABASE_KEY: placeholder-key
           GEMINI_API_KEY: placeholder-key
+          PYTHONPATH: .
 
       - name: Upload coverage
         uses: codecov/codecov-action@v4
         with:
-          file: backend/coverage.xml
+          file: coverage.xml
           fail_ci_if_error: false
         continue-on-error: true
