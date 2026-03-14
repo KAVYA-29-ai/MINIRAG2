@@ -12,25 +12,29 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      - run: pip install -r requirements.txt pytest pytest-cov httpx
+      - name: Install dependencies
+        run: |
+          pip install pytest pytest-cov httpx
+          pip install -r requirements.txt || pip install -r backend/requirements.txt || true
 
       - name: Run tests with coverage
         run: |
           cd backend
-          pytest tests/ --cov=. --cov-report=xml --cov-report=term-missing
+          pytest tests/ --cov=. --cov-report=xml --cov-report=term-missing -v
         env:
-          JWT_SECRET: test-secret
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          JWT_SECRET: test-secret-key-for-ci
+          SUPABASE_URL: https://placeholder.supabase.co
+          SUPABASE_KEY: placeholder-key
+          GEMINI_API_KEY: placeholder-key
 
-      - name: Upload coverage to Codecov
+      - name: Upload coverage
         uses: codecov/codecov-action@v4
         with:
           file: backend/coverage.xml
-          flags: backend
           fail_ci_if_error: false
+        continue-on-error: true
