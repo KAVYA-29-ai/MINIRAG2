@@ -18,9 +18,9 @@ def _user(role="teacher"):
 
 def _jwt(role="teacher"):
     from jose import jwt as j
-    from datetime import datetime, timedelta
+    from datetime import datetime, timedelta, timezone
     return j.encode({"user_id": f"uuid-{role}", "institution_id": f"{role}001",
-                     "role": role, "exp": datetime.utcnow() + timedelta(minutes=60)},
+                     "role": role, "exp": datetime.now(timezone.utc) + timedelta(minutes=60)},
                     os.getenv("JWT_SECRET", "your-secret-key"), algorithm="HS256")
 
 def _auth(role="teacher"):
@@ -64,12 +64,12 @@ class TestSubmitFeedback:
 
     def test_student_blocked_403(self):
         _su("student")
-        r = _client.post("/api/feedback/", json={"category": CAT, "message": "Hi"}, headers=_auth("student"))
+        r = _client.post("/api/feedback/", json={"category": CAT, "message": "Hello"}, headers=_auth("student"))
         assert r.status_code == 403
 
     def test_admin_blocked_403(self):
         _su("admin")
-        r = _client.post("/api/feedback/", json={"category": CAT, "message": "Hi"}, headers=_auth("admin"))
+        r = _client.post("/api/feedback/", json={"category": CAT, "message": "Hello"}, headers=_auth("admin"))
         assert r.status_code == 403
 
     def test_missing_message_422(self):

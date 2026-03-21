@@ -3,11 +3,13 @@
  *
  * Handles RAG search, profile management, student analysis, feedback, and analytics for teachers.
  */
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import AnimatedBackground from '../components/AnimatedBackground';
 import { authAPI, ragAPI, usersAPI, feedbackAPI, studentFeedbackAPI, analyticsAPI } from '../services/api';
 import { handleError } from '../services/errorHandler';
+import { avatarSource, imageFallbackHandler } from '../utils/media';
+import { matchesQuery } from '../utils/search';
 import './TeacherDashboard.css';
 
 const TeacherDashboard = () => {
@@ -22,48 +24,41 @@ const TeacherDashboard = () => {
   const [searching, setSearching] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [loading, setLoading] = useState(true);
-  
+  const [operationStatus, setOperationStatus] = useState('');
+
   // User data
   const [currentUser, setCurrentUser] = useState(null);
   const [userName, setUserName] = useState('');
   const [editName, setEditName] = useState('');
   const [selectedAvatar, setSelectedAvatar] = useState('male');
-  
+
   // Teachers from API
   const [teachers, setTeachers] = useState([]);
   const [teacherSearch, setTeacherSearch] = useState("");
-  
+
   // Student analysis from API
   const [studentProblems, setStudentProblems] = useState([]);
-  
+
   // Feedback
   const [feedbackMessage, setFeedbackMessage] = useState('');
   const [feedbackCategory, setFeedbackCategory] = useState('rag');
   const [myFeedback, setMyFeedback] = useState([]);
   const [studentFeedbackList, setStudentFeedbackList] = useState([]);
-  
+
   // Analytics
   const [analytics, setAnalytics] = useState(null);
-  
+
   // PDFs
   const [pdfs, setPdfs] = useState([]);
   const [uploadingPDF, setUploadingPDF] = useState(false);
   const [indexingPDF, setIndexingPDF] = useState(null);
-  
+
   // Search history
   const [searchHistory, setSearchHistory] = useState([]);
 
-  const getAvatarSrc = (avatar) => (avatar === 'female' ? '/images/female.png' : '/images/male.png');
-
-  const handleAvatarError = (event) => {
-    event.currentTarget.onerror = null;
-    event.currentTarget.src = AVATAR_PLACEHOLDER;
-  };
-
-  const handleLogoError = (event) => {
-    event.currentTarget.onerror = null;
-    event.currentTarget.src = LOGO_PLACEHOLDER;
-  };
+  const getAvatarSrc = avatarSource;
+  const handleAvatarError = imageFallbackHandler(AVATAR_PLACEHOLDER);
+  const handleLogoError = imageFallbackHandler(LOGO_PLACEHOLDER);
 
   useEffect(() => {
     loadData();
@@ -81,7 +76,7 @@ const TeacherDashboard = () => {
       setUserName(user.name);
       setEditName(user.name);
       setSelectedAvatar(user.avatar || 'male');
-      
+
       // Load all data independently — one failure must not block others
       const results = await Promise.allSettled([
         usersAPI.getTeachers(),
@@ -117,8 +112,10 @@ const TeacherDashboard = () => {
       const results = await ragAPI.search(searchQuery);
       setSearchResults(results.results || []);
       setGeneratedAnswer(results.generated_answer || '');
+      setOperationStatus(`Search complete: ${results.total_results || 0} matches.`);
     } catch (error) {
-      console.error('Search error:', error);
+      setOperationStatus('Search failed. Please try again.');
+      handleError(error, 'Search failed.');
     } finally {
       setSearching(false);
     }
@@ -131,13 +128,13 @@ const TeacherDashboard = () => {
         category: feedbackCategory,
         message: feedbackMessage
       });
-      alert('Feedback sent to Admin successfully!');
+      setOperationStatus('Feedback sent to admin successfully.');
       setFeedbackMessage('');
       // Reload feedback
       const feedback = await feedbackAPI.getMine();
       setMyFeedback(feedback);
     } catch (error) {
-      alert('Failed to send feedback: ' + error.message);
+      handleError(error, 'Failed to send feedback.');
     }
   };
 
@@ -152,11 +149,11 @@ const TeacherDashboard = () => {
     setUploadingPDF(true);
     try {
       await ragAPI.uploadPDF(file);
-      alert(`PDF "${file.name}" uploaded! Click Index to make it searchable.`);
+      setOperationStatus(`Uploaded ${file.name}. Click Index to make it searchable.`);
       const pdfList = await ragAPI.getPDFs();
       setPdfs(pdfList);
     } catch (error) {
-      alert('Upload failed: ' + error.message);
+      handleError(error, 'Upload failed.');
     } finally {
       setUploadingPDF(false);
       e.target.value = '';
@@ -167,11 +164,11 @@ const TeacherDashboard = () => {
     setIndexingPDF(pdfId);
     try {
       const result = await ragAPI.indexPDF(pdfId);
-      alert(result.message);
+      setOperationStatus(result.message || 'PDF indexed successfully.');
       const pdfList = await ragAPI.getPDFs();
       setPdfs(pdfList);
     } catch (error) {
-      alert('Indexing failed: ' + error.message);
+      handleError(error, 'Indexing failed.');
     } finally {
       setIndexingPDF(null);
     }
@@ -182,11 +179,16 @@ const TeacherDashboard = () => {
     try {
       await ragAPI.deletePDF(pdfId);
       setPdfs(pdfs.filter(p => p.id !== pdfId));
-      alert('PDF deleted successfully!');
+      setOperationStatus(`Deleted ${filename}.`);
     } catch (error) {
-      alert('Delete failed: ' + error.message);
+      handleError(error, 'Delete failed.');
     }
   };
+
+  const filteredTeachers = useMemo(
+    () => teachers.filter((teacher) => matchesQuery(teacherSearch, [teacher.name, teacher.institution_id])),
+    [teachers, teacherSearch]
+  );
 
   if (loading) {
     return (
@@ -200,7 +202,7 @@ const TeacherDashboard = () => {
   return (
     <div className="teacher-dashboard">
       <AnimatedBackground />
-      
+
       {/* Sidebar */}
       <aside className="sidebar">
         <div className="sidebar-header">
@@ -264,7 +266,7 @@ const TeacherDashboard = () => {
 
         <div className="sidebar-footer">
           <div className="user-profile">
-            <img 
+            <img
               src={getAvatarSrc(selectedAvatar)}
               alt={selectedAvatar}
               className="avatar-image"
@@ -275,7 +277,7 @@ const TeacherDashboard = () => {
               <p className="user-id">Teacher ID: {currentUser?.institution_id || ''}</p>
             </div>
           </div>
-          <button 
+          <button
             className="edit-profile-btn"
             onClick={() => setShowProfileModal(true)}
           >
@@ -292,7 +294,7 @@ const TeacherDashboard = () => {
         <div className="modal-overlay" onClick={() => setShowProfileModal(false)}>
           <div className="profile-modal" onClick={(e) => e.stopPropagation()}>
             <h3>Edit Your Profile</h3>
-            
+
             <div className="profile-form">
               <div className="form-group-modal">
                 <label>Your Name</label>
@@ -308,14 +310,14 @@ const TeacherDashboard = () => {
               <div className="form-group-modal">
                 <label>Choose Avatar</label>
                 <div className="avatar-options-modal">
-                  <button 
+                  <button
                     className={`avatar-option ${selectedAvatar === 'male' ? 'selected' : ''}`}
                     onClick={() => setSelectedAvatar('male')}
                   >
                     <img src="/images/male.png" alt="Male" className="modal-avatar-img" onError={handleAvatarError} />
                     <p>Male</p>
                   </button>
-                  <button 
+                  <button
                     className={`avatar-option ${selectedAvatar === 'female' ? 'selected' : ''}`}
                     onClick={() => setSelectedAvatar('female')}
                   >
@@ -327,7 +329,7 @@ const TeacherDashboard = () => {
             </div>
 
             <div className="profile-modal-buttons">
-              <button 
+              <button
                 className="save-profile-btn"
                 onClick={async () => {
                   try {
@@ -345,7 +347,7 @@ const TeacherDashboard = () => {
               >
                 Save Changes
               </button>
-              <button 
+              <button
                 className="cancel-profile-btn"
                 onClick={() => {
                   setEditName(userName);
@@ -376,12 +378,13 @@ const TeacherDashboard = () => {
         </header>
 
         <div className="content-area">
+          {operationStatus && <div className="operation-status">{operationStatus}</div>}
           {/* RAG Search Tab - Search Student PDFs */}
           {activeTab === 'rag-search' && (
             <section className="tab-content">
               <h2>🔍 RAG Search - Student PDFs & Materials</h2>
               <p className="section-desc">Search across all student-uploaded PDFs and course materials using RAG</p>
-              
+
               <div className="search-container">
                 <div className="search-box">
                   <input
@@ -478,17 +481,17 @@ const TeacherDashboard = () => {
             <section className="tab-content">
               <h2>📄 PDF Upload & Management</h2>
               <p className="section-desc">Upload course materials and PDFs for RAG indexing</p>
-              
+
               <div className="pdf-upload-section">
                 <div className="upload-area">
                   <span className="upload-icon">📤</span>
                   <h3>Upload New PDF</h3>
                   <p>Upload course notes, question papers, or study materials</p>
                   <label className="upload-btn-label">
-                    <input 
-                      type="file" 
-                      accept=".pdf" 
-                      onChange={handleUploadPDF} 
+                    <input
+                      type="file"
+                      accept=".pdf"
+                      onChange={handleUploadPDF}
                       disabled={uploadingPDF}
                       style={{display: 'none'}}
                     />
@@ -526,7 +529,7 @@ const TeacherDashboard = () => {
                     <span className="date-cell">{pdf.created_at ? new Date(pdf.created_at).toLocaleDateString() : '--'}</span>
                     <div className="actions-cell">
                       {pdf.status !== 'indexed' && (
-                        <button 
+                        <button
                           className="index-btn"
                           onClick={() => handleIndexPDF(pdf.id)}
                           disabled={indexingPDF === pdf.id}
@@ -534,7 +537,7 @@ const TeacherDashboard = () => {
                           {indexingPDF === pdf.id ? '⏳ Indexing...' : '🔄 Index'}
                         </button>
                       )}
-                      <button 
+                      <button
                         className="delete-btn"
                         onClick={() => handleDeletePDF(pdf.id, pdf.filename)}
                         title="Delete PDF"
@@ -557,25 +560,11 @@ const TeacherDashboard = () => {
             <section className="tab-content">
               <h2>👥 Faculty Members</h2>
               <p className="section-desc">View other teachers in your institution</p>
-              
+
               <div className="teachers-grid">
-                {teachers.filter(teacher => {
-                  if (!teacherSearch.trim()) return true;
-                  const q = teacherSearch.trim().toLowerCase();
-                  return (
-                    teacher.name.toLowerCase().includes(q) ||
-                    teacher.institution_id.toLowerCase().includes(q)
-                  );
-                }).length > 0 ? teachers.filter(teacher => {
-                  if (!teacherSearch.trim()) return true;
-                  const q = teacherSearch.trim().toLowerCase();
-                  return (
-                    teacher.name.toLowerCase().includes(q) ||
-                    teacher.institution_id.toLowerCase().includes(q)
-                  );
-                }).map((teacher) => (
+                {filteredTeachers.length > 0 ? filteredTeachers.map((teacher) => (
                   <div key={teacher.id} className="teacher-card">
-                    <img 
+                    <img
                       src={getAvatarSrc(teacher.avatar)}
                       alt={teacher.name}
                       className="teacher-avatar-img"
@@ -599,7 +588,7 @@ const TeacherDashboard = () => {
             <section className="tab-content">
               <h2>📊 Student Problem Analysis (RAG Insights)</h2>
               <p className="section-desc">Analyze student learning patterns based on RAG search data</p>
-              
+
               <div className="analysis-stats">
                 <div className="stat-card">
                   <span className="stat-icon">�</span>
@@ -678,7 +667,7 @@ const TeacherDashboard = () => {
           {activeTab === 'feedback' && (
             <section className="tab-content">
               <h2>💬 Send Feedback to Admin</h2>
-              
+
               <div className="feedback-notice">
                 <span className="notice-icon">ℹ️</span>
                 <p>Your feedback will be sent with your identity visible to the admin for proper follow-up.</p>
@@ -686,7 +675,7 @@ const TeacherDashboard = () => {
 
               <div className="feedback-form">
                 <div className="sender-info">
-                  <img 
+                  <img
                     src={getAvatarSrc(selectedAvatar)}
                     alt="Your avatar"
                     className="sender-avatar"

@@ -14,6 +14,7 @@ const LoginRegister = () => {
   const [isLogin, setIsLogin] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [formData, setFormData] = useState({
     name: '',
     institutionId: '',
@@ -43,12 +44,13 @@ const LoginRegister = () => {
     e.preventDefault();
     setLoading(true);
     setError('');
+    setSuccess('');
 
     try {
       if (isLogin) {
         const response = await authAPI.login(formData.institutionId, formData.password);
         const user = response.user;
-        
+
         if (user.role === 'admin') {
           navigate('/admin-dashboard');
         } else if (user.role === 'teacher') {
@@ -80,6 +82,13 @@ const LoginRegister = () => {
           avatar: 'male',
           role: 'student'
         });
+
+        if (response.requires_verification) {
+          setSuccess(response.message || 'Registration successful. Please verify your email before login.');
+          setIsLogin(true);
+          return;
+        }
+
         const user = response.user;
         if (user.role === 'admin') {
           navigate('/admin-dashboard');
@@ -100,6 +109,7 @@ const LoginRegister = () => {
   const toggleMode = () => {
     setIsLogin(!isLogin);
     setError('');
+    setSuccess('');
     setFormData({
       name: '',
       institutionId: '',
@@ -121,13 +131,13 @@ const LoginRegister = () => {
 
         <div className="auth-box">
           <div className="form-toggle">
-            <button 
+            <button
               className={`toggle-btn ${isLogin ? 'active' : ''}`}
               onClick={() => !isLogin && toggleMode()}
             >
               Login
             </button>
-            <button 
+            <button
               className={`toggle-btn ${!isLogin ? 'active' : ''}`}
               onClick={() => isLogin && toggleMode()}
             >
@@ -137,7 +147,8 @@ const LoginRegister = () => {
 
           <form onSubmit={handleSubmit} className="auth-form">
             {error && <div className="error-message">{error}</div>}
-            
+            {success && <div className="success-message">{success}</div>}
+
             {!isLogin && (
               <div className="form-group">
                 <label htmlFor="name">Full Name</label>
@@ -244,7 +255,7 @@ const LoginRegister = () => {
           <div className="form-footer">
             <p>
               {isLogin ? "Don't have an account? " : "Already have an account? "}
-              <button 
+              <button
                 type="button"
                 className="toggle-link"
                 onClick={toggleMode}
@@ -255,7 +266,7 @@ const LoginRegister = () => {
           </div>
         </div>
 
-        <button 
+        <button
           className="back-btn"
           onClick={() => navigate('/')}
         >

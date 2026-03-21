@@ -289,6 +289,15 @@
   padding: 2rem;
 }
 
+.operation-status {
+  margin-bottom: 1rem;
+  padding: 0.75rem 1rem;
+  border-radius: 0.6rem;
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  background: rgba(16, 185, 129, 0.12);
+  color: #34d399;
+}
+
 .tab-content {
   display: block;
   animation: fadeIn 0.3s ease-out forwards;

@@ -293,6 +293,15 @@
   padding: 2rem;
 }
 
+.operation-status {
+  margin-bottom: 1rem;
+  padding: 0.75rem 1rem;
+  border-radius: 0.6rem;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  background: rgba(245, 158, 11, 0.12);
+  color: #fbbf24;
+}
+
 .tab-content {
   display: block;
   animation: fadeIn 0.3s ease-out forwards;
@@ -929,6 +938,14 @@
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 1.5rem;
+}
+
+.chart-panel {
+  background: rgba(20, 31, 58, 0.7);
+  border: 1px solid rgba(245, 158, 11, 0.15);
+  border-radius: 0.8rem;
+  padding: 1rem;
+  margin-top: 0.5rem;
 }
 
 .lang-card {

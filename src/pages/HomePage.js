@@ -20,13 +20,13 @@ const HomePage = () => {
           <h1>EduRag</h1>
         </div>
         <nav className="nav-links">
-          <button 
+          <button
             className="nav-btn login-btn"
             onClick={() => navigate('/auth')}
           >
             Login
           </button>
-          <button 
+          <button
             className="nav-btn register-btn"
             onClick={() => navigate('/auth')}
           >
@@ -43,7 +43,7 @@ const HomePage = () => {
           <p className="hero-subtitle">
             Advanced RAG Model for Intelligent Learning
           </p>
-          
+
           <div className="features-grid">
             <div className="feature-card">
               <div className="feature-icon">🤖</div>
@@ -83,7 +83,7 @@ const HomePage = () => {
           </div>
 
           <div className="cta-buttons">
-            <button 
+            <button
               className="cta-btn primary"
               onClick={() => navigate('/auth')}
             >

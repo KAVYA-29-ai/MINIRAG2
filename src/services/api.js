@@ -78,16 +78,16 @@ const removeUser = () => localStorage.removeItem('edurag_user');
 // Base fetch wrapper with auth
 const apiFetch = async (endpoint, options = {}) => {
     const token = getToken();
-    
+
     const headers = {
         'Content-Type': 'application/json',
         ...options.headers,
     };
-    
+
     if (token) {
         headers['Authorization'] = `Bearer ${token}`;
     }
-    
+
     const candidates = getApiCandidates();
     let lastError = null;
 
@@ -147,26 +147,26 @@ export const authAPI = {
         if (!data || !data.access_token || !data.user) {
             throw new Error('Login failed: Invalid server response');
         }
-        
+
         // Store token and user data
         setToken(data.access_token);
         setUser(data.user);
-        
+
         return data;
     },
-    
+
     register: async (userData) => {
         return apiFetch('/auth/register', {
             method: 'POST',
             body: JSON.stringify(userData),
         });
     },
-    
+
     logout: () => {
         removeToken();
         removeUser();
     },
-    
+
     getCurrentUser: () => getUser(),
     isAuthenticated: () => !!getToken(),
 };
@@ -178,43 +178,43 @@ export const usersAPI = {
     getAll: async (skip = 0, limit = 100) => {
         return apiFetch(`/users/?skip=${skip}&limit=${limit}`);
     },
-    
+
     getById: async (userId) => {
         return apiFetch(`/users/${userId}`);
     },
-    
+
     getMe: async () => {
         return apiFetch('/users/me');
     },
-    
+
     update: async (userId, updates) => {
         return apiFetch(`/users/${userId}`, {
             method: 'PATCH',
             body: JSON.stringify(updates),
         });
     },
-    
+
     updateRole: async (userId, newRole) => {
         return apiFetch(`/users/${userId}/role`, {
             method: 'PATCH',
             body: JSON.stringify({ role: newRole }),
         });
     },
-    
+
     delete: async (userId) => {
         return apiFetch(`/users/${userId}`, {
             method: 'DELETE',
         });
     },
-    
+
     getStudents: async () => {
         return apiFetch('/users/students');
     },
-    
+
     getTeachers: async () => {
         return apiFetch('/users/teachers');
     },
-    
+
     getStats: async () => {
         return apiFetch('/users/stats');
     },
@@ -230,11 +230,11 @@ export const ragAPI = {
             body: JSON.stringify({ query, language, limit }),
         });
     },
-    
+
     uploadPDF: async (file) => {
         const formData = new FormData();
         formData.append('file', file);
-        
+
         const token = getToken();
         const response = await fetch(`${API_BASE_URL}/rag/upload-pdf`, {
             method: 'POST',
@@ -243,42 +243,57 @@ export const ragAPI = {
             },
             body: formData,
         });
-        
+
         const data = await response.json();
-        
+
         if (!response.ok) {
             throw new Error(data.detail || 'Upload failed');
         }
-        
+
         return data;
     },
-    
+
     getPDFs: async () => {
         return apiFetch('/rag/pdfs');
     },
-    
+
     deletePDF: async (pdfId) => {
         return apiFetch(`/rag/pdfs/${pdfId}`, {
             method: 'DELETE',
         });
     },
-    
+
     indexPDF: async (pdfId) => {
         return apiFetch(`/rag/pdfs/${pdfId}/index`, {
             method: 'POST',
         });
     },
-    
+
     getPDFDetail: async (pdfId) => {
         return apiFetch(`/rag/pdfs/${pdfId}`);
     },
-    
+
     getSearchHistory: async (limit = 10) => {
         return apiFetch(`/rag/search-history?limit=${limit}`);
     },
-    
+
     getTrendingTopics: async () => {
         return apiFetch('/rag/trending');
+    },
+
+    getPDFSummary: async (pdfId, language = 'english') => {
+        return apiFetch(`/rag/pdfs/${pdfId}/summary?language=${encodeURIComponent(language)}`);
+    },
+
+    getRecommendations: async () => {
+        return apiFetch('/rag/recommendations');
+    },
+
+    generateStudyPlan: async (query, language = 'english') => {
+        return apiFetch('/rag/study-plan', {
+            method: 'POST',
+            body: JSON.stringify({ query, language }),
+        });
     },
 };
 
@@ -292,29 +307,29 @@ export const feedbackAPI = {
             body: JSON.stringify(feedbackData),
         });
     },
-    
+
     getMine: async () => {
         return apiFetch('/feedback/mine');
     },
-    
+
     getAll: async (status = null) => {
         const url = status ? `/feedback/?status=${status}` : '/feedback/';
         return apiFetch(url);
     },
-    
+
     respond: async (feedbackId, responseText) => {
         return apiFetch(`/feedback/${feedbackId}/respond`, {
             method: 'POST',
             body: JSON.stringify({ response: responseText }),
         });
     },
-    
+
     archive: async (feedbackId) => {
         return apiFetch(`/feedback/${feedbackId}/archive`, {
             method: 'PATCH',
         });
     },
-    
+
     getStats: async () => {
         return apiFetch('/feedback/stats');
     },
@@ -342,23 +357,23 @@ export const analyticsAPI = {
     getSummary: async () => {
         return apiFetch('/analytics/summary');
     },
-    
+
     getUsageByRole: async () => {
         return apiFetch('/analytics/usage-by-role');
     },
-    
+
     getLanguageUsage: async () => {
         return apiFetch('/analytics/language-usage');
     },
-    
+
     getDailyQueries: async (days = 30) => {
         return apiFetch(`/analytics/daily-queries?days=${days}`);
     },
-    
+
     getStudentInsights: async () => {
         return apiFetch('/analytics/student-insights');
     },
-    
+
     getTopTopics: async (limit = 10) => {
         return apiFetch(`/analytics/top-topics?limit=${limit}`);
     },

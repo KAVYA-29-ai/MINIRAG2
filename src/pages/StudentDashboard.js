@@ -9,11 +9,12 @@
  * - Feedback submission
  * - Animated background
  */
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import AnimatedBackground from '../components/AnimatedBackground';
 import { authAPI, ragAPI, usersAPI, studentFeedbackAPI } from '../services/api';
 import { handleError } from '../services/errorHandler';
+import { avatarSource, imageFallbackHandler } from '../utils/media';
 import './StudentDashboard.css';
 
 /**
@@ -59,6 +60,7 @@ const StudentDashboard = () => {
   const [searching, setSearching] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [operationStatus, setOperationStatus] = useState('');
 
   // --- User profile state ---
   const [currentUser, setCurrentUser] = useState(null); // User object from API
@@ -72,6 +74,11 @@ const StudentDashboard = () => {
 
   // --- Search history ---
   const [searchHistory, setSearchHistory] = useState([]);
+  const [historyFilter, setHistoryFilter] = useState('');
+  const [recommendations, setRecommendations] = useState([]);
+  const [loadingRecommendations, setLoadingRecommendations] = useState(false);
+  const [studyPlan, setStudyPlan] = useState('');
+  const [studyPlanLoading, setStudyPlanLoading] = useState(false);
 
   // --- Feedback ---
   const [feedbackMessage, setFeedbackMessage] = useState('');
@@ -82,25 +89,19 @@ const StudentDashboard = () => {
    * @param {string} avatar - 'male' or 'female'
    * @returns {string} image path
    */
-  const getAvatarSrc = (avatar) => (avatar === 'female' ? '/images/female.png' : '/images/male.png');
+  const getAvatarSrc = avatarSource;
 
   /**
    * Handle avatar image load error
    * @param {Event} event
    */
-  const handleAvatarError = (event) => {
-    event.currentTarget.onerror = null;
-    event.currentTarget.src = AVATAR_PLACEHOLDER;
-  };
+  const handleAvatarError = imageFallbackHandler(AVATAR_PLACEHOLDER);
 
   /**
    * Handle logo image load error
    * @param {Event} event
    */
-  const handleLogoError = (event) => {
-    event.currentTarget.onerror = null;
-    event.currentTarget.src = LOGO_PLACEHOLDER;
-  };
+  const handleLogoError = imageFallbackHandler(LOGO_PLACEHOLDER);
 
   // --- Effects ---
   useEffect(() => {
@@ -123,25 +124,40 @@ const StudentDashboard = () => {
       setUserName(user.name);
       setEditName(user.name);
       setSelectedAvatar(user.avatar || 'male');
-      
+
       // Load all data independently
+      setLoadingRecommendations(true);
+      const recommendationPromise = typeof ragAPI.getRecommendations === 'function'
+        ? ragAPI.getRecommendations()
+        : Promise.resolve({ recommendations: [] });
+
       const results = await Promise.allSettled([
         usersAPI.getStudents(),
-        ragAPI.getSearchHistory(5),
+        ragAPI.getSearchHistory(50),
+        recommendationPromise,
       ]);
 
       if (results[0].status === 'fulfilled') {
         const students = results[0].value || [];
         setBuddies(students.filter(s => s.id !== user.id));
       }
-      if (results[1].status === 'fulfilled') setSearchHistory(results[1].value || []);
+      if (results[1].status === 'fulfilled') {
+        setSearchHistory(results[1].value || []);
+      }
+      if (results[2].status === 'fulfilled') {
+        setRecommendations(results[2].value?.recommendations || []);
+      }
     } catch (error) {
-      console.error('Error loading data:', error);
+      handleError(error, 'Failed to load dashboard data.');
     } finally {
+      setLoadingRecommendations(false);
       setLoading(false);
     }
   };
 
+  /**
+   * Run the RAG query and refresh local search history.
+   */
   const handleSearch = async () => {
     if (!searchQuery.trim()) return;
     setSearching(true);
@@ -149,27 +165,54 @@ const StudentDashboard = () => {
       const results = await ragAPI.search(searchQuery);
       setSearchResults(results.results || []);
       setGeneratedAnswer(results.generated_answer || '');
+      const history = await ragAPI.getSearchHistory(50);
+      setSearchHistory(history || []);
+      setOperationStatus(`Found ${results.total_results || 0} results.`);
     } catch (error) {
-      console.error('Search error:', error);
+      handleError(error, 'Search failed. Please try again.');
     } finally {
       setSearching(false);
     }
   };
 
+  /**
+   * Submit student feedback with anonymous/identified mode.
+   */
   const handleSendFeedback = async () => {
     if (!feedbackMessage.trim()) return;
     try {
       await studentFeedbackAPI.send(feedbackMessage, isAnonymous);
-      alert('Feedback sent successfully!');
+      setOperationStatus('Feedback sent successfully.');
       setFeedbackMessage('');
     } catch (error) {
-      alert('Failed to send feedback');
+      handleError(error, 'Failed to send feedback.');
     }
   };
 
   const handleLogout = () => {
     authAPI.logout();
     navigate('/');
+  };
+
+  /**
+   * Build an adaptive 7-day study plan from current query context.
+   */
+  const handleGenerateStudyPlan = async () => {
+    if (!searchQuery.trim()) {
+      setOperationStatus('Type a topic first to generate a study plan.');
+      return;
+    }
+    setStudyPlanLoading(true);
+    try {
+      const planResponse = await ragAPI.generateStudyPlan(searchQuery, 'english');
+      setStudyPlan(planResponse?.study_plan || 'No plan generated.');
+      setOperationStatus('Study plan generated successfully.');
+    } catch (error) {
+      handleError(error, 'Failed to generate study plan.');
+      setOperationStatus('Study plan generation failed.');
+    } finally {
+      setStudyPlanLoading(false);
+    }
   };
 
   const fetchChatMessages = async () => {
@@ -180,7 +223,6 @@ const StudentDashboard = () => {
       if (res.ok) {
         const data = await res.json();
         setChatMessages(data);
-        setTimeout(() => fetchChatMessages(), 5000); // auto-refresh every 5s
       }
     } catch (err) {
       // ignore errors for polling
@@ -202,12 +244,50 @@ const StudentDashboard = () => {
         setChatInput("");
         fetchChatMessages();
       }
-    } catch (err) {}
+    } catch (err) {
+      handleError(err, 'Failed to send chat message.');
+    }
   };
 
   const [chatMessages, setChatMessages] = useState([]);
   const [chatInput, setChatInput] = useState("");
   const chatEndRef = useRef(null);
+
+  const filteredBuddies = useMemo(() => {
+    const q = buddySearch.trim().toLowerCase();
+    if (!q) return buddies;
+    return buddies.filter((buddy) => (
+      buddy.name.toLowerCase().includes(q) ||
+      buddy.institution_id.toLowerCase().includes(q)
+    ));
+  }, [buddies, buddySearch]);
+
+  const filteredHistory = useMemo(() => {
+    const q = historyFilter.trim().toLowerCase();
+    if (!q) return searchHistory;
+    return searchHistory.filter((item) => (
+      (item.query || '').toLowerCase().includes(q) ||
+      (item.language || '').toLowerCase().includes(q)
+    ));
+  }, [searchHistory, historyFilter]);
+
+  useEffect(() => {
+    if (activeTab !== 'chatroom') return undefined;
+
+    fetchChatMessages();
+    const poller = setInterval(fetchChatMessages, 7000);
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+    const wsToken = encodeURIComponent(localStorage.getItem('edurag_token') || '');
+    const wsUrl = `${wsProtocol}://${window.location.host}/api/ws/chat?token=${wsToken}`;
+    const socket = new WebSocket(wsUrl);
+    socket.onmessage = () => fetchChatMessages();
+
+    return () => {
+      clearInterval(poller);
+      socket.close();
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
 
   if (loading) {
     return (
@@ -262,6 +342,14 @@ const StudentDashboard = () => {
           </button>
 
           <button
+            className={`nav-item ${activeTab === 'history' ? 'active' : ''}`}
+            onClick={() => setActiveTab('history')}
+          >
+            <span className="nav-icon">🕘</span>
+            <span>Search History</span>
+          </button>
+
+          <button
             className={`nav-item ${activeTab === 'chatroom' ? 'active' : ''}`}
             onClick={() => setActiveTab('chatroom')}
           >
@@ -272,7 +360,7 @@ const StudentDashboard = () => {
 
         <div className="sidebar-footer">
           <div className="user-profile">
-            <img 
+            <img
               src={getAvatarSrc(selectedAvatar)}
               alt={selectedAvatar}
               className="avatar-image"
@@ -283,7 +371,7 @@ const StudentDashboard = () => {
               <p className="user-id">{currentUser?.institution_id || ''}</p>
             </div>
           </div>
-          <button 
+          <button
             className="edit-profile-btn"
             onClick={() => setShowProfileModal(true)}
           >
@@ -300,7 +388,7 @@ const StudentDashboard = () => {
         <div className="modal-overlay" onClick={() => setShowProfileModal(false)}>
           <div className="profile-modal" onClick={(e) => e.stopPropagation()}>
             <h3>Edit Your Profile</h3>
-            
+
             <div className="profile-form">
               <div className="form-group-modal">
                 <label>Your Name</label>
@@ -316,14 +404,14 @@ const StudentDashboard = () => {
               <div className="form-group-modal">
                 <label>Choose Avatar</label>
                 <div className="avatar-options-modal">
-                  <button 
+                  <button
                     className={`avatar-option ${selectedAvatar === 'male' ? 'selected' : ''}`}
                     onClick={() => setSelectedAvatar('male')}
                   >
                     <img src="/images/male.png" alt="Male" className="modal-avatar-img" onError={handleAvatarError} />
                     <p>Male</p>
                   </button>
-                  <button 
+                  <button
                     className={`avatar-option ${selectedAvatar === 'female' ? 'selected' : ''}`}
                     onClick={() => setSelectedAvatar('female')}
                   >
@@ -335,7 +423,7 @@ const StudentDashboard = () => {
             </div>
 
             <div className="profile-modal-buttons">
-              <button 
+              <button
                 className="save-profile-btn"
                 onClick={async () => {
                   try {
@@ -353,7 +441,7 @@ const StudentDashboard = () => {
               >
                 Save Changes
               </button>
-              <button 
+              <button
                 className="close-modal-btn"
                 onClick={() => {
                   setEditName(userName);
@@ -386,6 +474,7 @@ const StudentDashboard = () => {
         </header>
 
         <div className="content-area">
+          {operationStatus && <div className="operation-status">{operationStatus}</div>}
           {/* RAG Search Tab */}
           {activeTab === 'rag-search' && (
             <section className="tab-content rag-search-section">
@@ -477,23 +566,9 @@ const StudentDashboard = () => {
             <section className="tab-content buddies-section">
               <h2>Student Buddies</h2>
               <div className="buddies-grid">
-                {buddies.filter(buddy => {
-                  if (!buddySearch.trim()) return true;
-                  const q = buddySearch.trim().toLowerCase();
-                  return (
-                    buddy.name.toLowerCase().includes(q) ||
-                    buddy.institution_id.toLowerCase().includes(q)
-                  );
-                }).length > 0 ? buddies.filter(buddy => {
-                  if (!buddySearch.trim()) return true;
-                  const q = buddySearch.trim().toLowerCase();
-                  return (
-                    buddy.name.toLowerCase().includes(q) ||
-                    buddy.institution_id.toLowerCase().includes(q)
-                  );
-                }).map((buddy) => (
+                {filteredBuddies.length > 0 ? filteredBuddies.map((buddy) => (
                   <div key={buddy.id} className="buddy-card">
-                    <img 
+                    <img
                       src={getAvatarSrc(buddy.avatar)}
                       alt={buddy.avatar || 'male'}
                       className="buddy-avatar-img"
@@ -528,9 +603,9 @@ const StudentDashboard = () => {
                 <div className="form-group">
                   <label>Show your name to teacher/admin?</label>
                   <div className="toggle-switch">
-                    <input 
-                      type="checkbox" 
-                      id="identity-toggle" 
+                    <input
+                      type="checkbox"
+                      id="identity-toggle"
                       checked={!isAnonymous}
                       onChange={(e) => setIsAnonymous(!e.target.checked)}
                     />
@@ -543,17 +618,36 @@ const StudentDashboard = () => {
               </div>
 
               <div className="feedback-history">
-                <h3>Recent Search History</h3>
-                <div className="feedback-list">
-                  {searchHistory.length > 0 ? searchHistory.map((item, idx) => (
-                    <div key={idx} className="feedback-item">
-                      <p className="feedback-text">{item.query}</p>
-                      <p className="feedback-time">{new Date(item.created_at).toLocaleDateString()}</p>
-                    </div>
-                  )) : (
-                    <p className="no-data">No search history yet</p>
-                  )}
-                </div>
+                <h3>Feedback Privacy</h3>
+                <p className="section-desc">Your feedback can be anonymous or identified based on the toggle above.</p>
+              </div>
+            </section>
+          )}
+
+          {/* Search History Tab */}
+          {activeTab === 'history' && (
+            <section className="tab-content history-section">
+              <h2>Search History</h2>
+              <div className="search-box">
+                <input
+                  type="text"
+                  placeholder="Filter by query or language..."
+                  value={historyFilter}
+                  onChange={(e) => setHistoryFilter(e.target.value)}
+                  className="large-search-input"
+                />
+              </div>
+              <div className="feedback-list">
+                {filteredHistory.length > 0 ? filteredHistory.map((item) => (
+                  <div key={item.id} className="feedback-item">
+                    <p className="feedback-text">{item.query}</p>
+                    <p className="feedback-time">
+                      {new Date(item.created_at).toLocaleString()} | {item.language || 'english'} | {item.results_count || 0} results
+                    </p>
+                  </div>
+                )) : (
+                  <p className="no-data">No matching search history found.</p>
+                )}
               </div>
             </section>
           )}
@@ -562,6 +656,7 @@ const StudentDashboard = () => {
           {activeTab === 'analysis' && (
             <section className="tab-content analysis-section">
               <h2>Learning Analytics</h2>
+              {loadingRecommendations && <p className="section-desc">Loading smart recommendations...</p>}
               <div className="analytics-grid">
                 <div className="analytics-card">
                   <h3>Search Activity</h3>
@@ -614,6 +709,36 @@ const StudentDashboard = () => {
                   <span>📝</span>
                   <p>Share anonymous feedback with your teachers anytime</p>
                 </div>
+              </div>
+
+              <div className="insights-section" style={{ marginTop: '1.25rem' }}>
+                <h3>Smart Recommendations</h3>
+                {recommendations.length > 0 ? recommendations.map((item, idx) => (
+                  <div className="insight-card" key={`rec-${idx}`}>
+                    <span>🎯</span>
+                    <p><strong>{item.topic}</strong> - {item.reason}</p>
+                  </div>
+                )) : (
+                  <p className="section-desc">No personalized recommendations yet. Do a few searches first.</p>
+                )}
+              </div>
+
+              <div className="insights-section" style={{ marginTop: '1.25rem' }}>
+                <h3>Adaptive Study Plan</h3>
+                <button className="search-btn" onClick={handleGenerateStudyPlan} disabled={studyPlanLoading}>
+                  {studyPlanLoading ? 'Generating Plan...' : 'Generate 7-Day Plan'}
+                </button>
+                {studyPlan && (
+                  <div className="ai-answer-card" style={{ marginTop: '1rem' }}>
+                    <div className="ai-answer-header">
+                      <span className="ai-icon">🧠</span>
+                      <h3>Your Study Plan</h3>
+                    </div>
+                    <div className="ai-answer-text">
+                      {studyPlan.split('\n').map((line, idx) => <p key={`plan-${idx}`}>{line}</p>)}
+                    </div>
+                  </div>
+                )}
               </div>
             </section>
           )}

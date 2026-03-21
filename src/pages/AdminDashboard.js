@@ -8,6 +8,20 @@ import { useNavigate } from 'react-router-dom';
 import AnimatedBackground from '../components/AnimatedBackground';
 import { authAPI, usersAPI, feedbackAPI, studentFeedbackAPI, analyticsAPI, ragAPI } from '../services/api';
 import { handleError } from '../services/errorHandler';
+import { avatarSource, imageFallbackHandler } from '../utils/media';
+import { matchesQuery } from '../utils/search';
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Legend,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
 import './AdminDashboard.css';
 
 const AdminDashboard = () => {
@@ -22,6 +36,7 @@ const AdminDashboard = () => {
   const [searching, setSearching] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [operationStatus, setOperationStatus] = useState('');
 
   // User data
   const [currentUser, setCurrentUser] = useState(null);
@@ -32,30 +47,22 @@ const AdminDashboard = () => {
 
   // Users from API
   const [users, setUsers] = useState([]);
-  
+
   // Feedback from API
   const [teacherFeedback, setTeacherFeedback] = useState([]);
   const [studentFeedbackList, setStudentFeedbackList] = useState([]);
-  
+
   // Analytics from API
   const [analytics, setAnalytics] = useState(null);
-  
+
   // PDFs from API
   const [pdfs, setPdfs] = useState([]);
   const [uploadingPDF, setUploadingPDF] = useState(false);
   const [indexingPDF, setIndexingPDF] = useState(null);
 
-  const getAvatarSrc = (avatar) => (avatar === 'female' ? '/images/female.png' : '/images/male.png');
-
-  const handleAvatarError = (event) => {
-    event.currentTarget.onerror = null;
-    event.currentTarget.src = AVATAR_PLACEHOLDER;
-  };
-
-  const handleLogoError = (event) => {
-    event.currentTarget.onerror = null;
-    event.currentTarget.src = LOGO_PLACEHOLDER;
-  };
+  const getAvatarSrc = avatarSource;
+  const handleAvatarError = imageFallbackHandler(AVATAR_PLACEHOLDER);
+  const handleLogoError = imageFallbackHandler(LOGO_PLACEHOLDER);
 
   useEffect(() => {
     loadData();
@@ -73,7 +80,7 @@ const AdminDashboard = () => {
       setUserName(user.name);
       setEditName(user.name);
       setSelectedAvatar(user.avatar || 'male');
-      
+
       // Load all data independently — one failure must not block others
       const results = await Promise.allSettled([
         usersAPI.getAll(),
@@ -84,21 +91,21 @@ const AdminDashboard = () => {
       ]);
 
       if (results[0].status === 'fulfilled') setUsers(results[0].value || []);
-      else console.error('Error loading users:', results[0].reason);
+      else setOperationStatus('Unable to load users right now.');
 
       if (results[1].status === 'fulfilled') setTeacherFeedback(results[1].value || []);
-      else console.error('Error loading feedback:', results[1].reason);
+      else setOperationStatus('Unable to load teacher feedback right now.');
 
       if (results[2].status === 'fulfilled') setAnalytics(results[2].value);
-      else console.error('Error loading analytics:', results[2].reason);
+      else setOperationStatus('Unable to load analytics right now.');
 
       if (results[3].status === 'fulfilled') setPdfs(results[3].value || []);
-      else console.error('Error loading PDFs:', results[3].reason);
+      else setOperationStatus('Unable to load PDFs right now.');
 
       if (results[4].status === 'fulfilled') setStudentFeedbackList(results[4].value || []);
-      else console.error('Error loading student feedback:', results[4].reason);
+      else setOperationStatus('Unable to load student feedback right now.');
     } catch (error) {
-      console.error('Error loading data:', error);
+      handleError(error, 'Failed to load dashboard data.');
     } finally {
       setLoading(false);
     }
@@ -111,8 +118,10 @@ const AdminDashboard = () => {
       const results = await ragAPI.search(searchQuery);
       setSearchResults(results.results || []);
       setGeneratedAnswer(results.generated_answer || '');
+      setOperationStatus(`Search complete: ${results.total_results || 0} matches.`);
     } catch (error) {
-      console.error('Search error:', error);
+      setOperationStatus('Search failed. Please retry.');
+      handleError(error, 'Search failed.');
     } finally {
       setSearching(false);
     }
@@ -126,12 +135,12 @@ const AdminDashboard = () => {
   const handleRoleChange = async (userId, newRole) => {
     try {
       await usersAPI.updateRole(userId, newRole);
-      setUsers(users.map(user => 
+      setUsers(users.map(user =>
         user.id === userId ? { ...user, role: newRole } : user
       ));
-      alert(`User role updated to ${newRole}!`);
+      setOperationStatus(`Role updated to ${newRole}.`);
     } catch (error) {
-      alert('Failed to update role: ' + error.message);
+      handleError(error, 'Failed to update role.');
     }
   };
 
@@ -140,9 +149,9 @@ const AdminDashboard = () => {
       try {
         await usersAPI.delete(userId);
         setUsers(users.filter(user => user.id !== userId));
-        alert('User deleted successfully!');
+        setOperationStatus('User deleted successfully.');
       } catch (error) {
-        alert('Failed to delete user: ' + error.message);
+        handleError(error, 'Failed to delete user.');
       }
     }
   };
@@ -152,9 +161,9 @@ const AdminDashboard = () => {
       await feedbackAPI.respond(feedbackId, response);
       const feedback = await feedbackAPI.getAll();
       setTeacherFeedback(feedback);
-      alert('Response sent!');
+      setOperationStatus('Feedback response sent.');
     } catch (error) {
-      alert('Failed to respond: ' + error.message);
+      handleError(error, 'Failed to send response.');
     }
   };
 
@@ -164,14 +173,23 @@ const AdminDashboard = () => {
     // Filter by search query
     if (searchQuery.trim()) {
       const q = searchQuery.trim().toLowerCase();
-      return (
-        user.name.toLowerCase().includes(q) ||
-        user.institution_id.toLowerCase().includes(q) ||
-        (user.email && user.email.toLowerCase().includes(q))
-      );
+      return matchesQuery(q, [user.name, user.institution_id, user.email]);
     }
     return true;
   });
+
+  const roleDistributionData = [
+    { name: 'Students', value: users.filter(u => u.role === 'student').length },
+    { name: 'Teachers', value: users.filter(u => u.role === 'teacher').length },
+    { name: 'Admins', value: users.filter(u => u.role === 'admin').length },
+  ];
+
+  const systemMetricsData = [
+    { name: 'Users', value: analytics?.total_users || 0 },
+    { name: 'Searches', value: analytics?.total_searches || 0 },
+    { name: 'PDFs', value: analytics?.total_pdfs || 0 },
+    { name: 'Indexed', value: analytics?.indexed_pdfs || 0 },
+  ];
 
   const handleUploadPDF = async (e) => {
     const file = e.target.files[0];
@@ -179,11 +197,11 @@ const AdminDashboard = () => {
     setUploadingPDF(true);
     try {
       await ragAPI.uploadPDF(file);
-      alert(`PDF "${file.name}" uploaded! Click Index to make it searchable.`);
+      setOperationStatus(`Uploaded: ${file.name}. Click Index to make it searchable.`);
       const pdfList = await ragAPI.getPDFs();
       setPdfs(pdfList);
     } catch (error) {
-      alert('Upload failed: ' + error.message);
+      setOperationStatus('Upload failed: ' + error.message);
     } finally {
       setUploadingPDF(false);
       e.target.value = '';
@@ -194,11 +212,11 @@ const AdminDashboard = () => {
     setIndexingPDF(pdfId);
     try {
       const result = await ragAPI.indexPDF(pdfId);
-      alert(result.message);
+      setOperationStatus(result.message || 'PDF indexed successfully.');
       const pdfList = await ragAPI.getPDFs();
       setPdfs(pdfList);
     } catch (error) {
-      alert('Indexing failed: ' + error.message);
+      setOperationStatus('Indexing failed: ' + error.message);
     } finally {
       setIndexingPDF(null);
     }
@@ -209,9 +227,9 @@ const AdminDashboard = () => {
     try {
       await ragAPI.deletePDF(pdfId);
       setPdfs(pdfs.filter(p => p.id !== pdfId));
-      alert('PDF deleted successfully!');
+      setOperationStatus(`Deleted: ${filename}`);
     } catch (error) {
-      alert('Delete failed: ' + error.message);
+      setOperationStatus('Delete failed: ' + error.message);
     }
   };
 
@@ -242,7 +260,7 @@ const AdminDashboard = () => {
   return (
     <div className="admin-dashboard">
       <AnimatedBackground />
-      
+
       {/* Sidebar */}
       <aside className="sidebar">
         <div className="sidebar-header">
@@ -306,7 +324,7 @@ const AdminDashboard = () => {
 
         <div className="sidebar-footer">
           <div className="user-profile">
-            <img 
+            <img
               src={getAvatarSrc(selectedAvatar)}
               alt={selectedAvatar}
               className="avatar-image"
@@ -317,7 +335,7 @@ const AdminDashboard = () => {
               <p className="user-id">Admin ID: {currentUser?.institution_id || ''}</p>
             </div>
           </div>
-          <button 
+          <button
             className="edit-profile-btn"
             onClick={() => setShowProfileModal(true)}
           >
@@ -334,7 +352,7 @@ const AdminDashboard = () => {
         <div className="modal-overlay" onClick={() => setShowProfileModal(false)}>
           <div className="profile-modal" onClick={(e) => e.stopPropagation()}>
             <h3>Edit Your Profile</h3>
-            
+
             <div className="profile-form">
               <div className="form-group-modal">
                 <label>Your Name</label>
@@ -350,14 +368,14 @@ const AdminDashboard = () => {
               <div className="form-group-modal">
                 <label>Choose Avatar</label>
                 <div className="avatar-options-modal">
-                  <button 
+                  <button
                     className={`avatar-option ${selectedAvatar === 'male' ? 'selected' : ''}`}
                     onClick={() => setSelectedAvatar('male')}
                   >
                     <img src="/images/male.png" alt="Male" className="modal-avatar-img" onError={handleAvatarError} />
                     <p>Male</p>
                   </button>
-                  <button 
+                  <button
                     className={`avatar-option ${selectedAvatar === 'female' ? 'selected' : ''}`}
                     onClick={() => setSelectedAvatar('female')}
                   >
@@ -369,7 +387,7 @@ const AdminDashboard = () => {
             </div>
 
             <div className="profile-modal-buttons">
-              <button 
+              <button
                 className="save-profile-btn"
                 onClick={async () => {
                   try {
@@ -387,7 +405,7 @@ const AdminDashboard = () => {
               >
                 Save Changes
               </button>
-              <button 
+              <button
                 className="cancel-profile-btn"
                 onClick={() => {
                   setEditName(userName);
@@ -418,17 +436,18 @@ const AdminDashboard = () => {
         </header>
 
         <div className="content-area">
+          {operationStatus && <div className="operation-status">{operationStatus}</div>}
           {/* User Management Tab */}
           {activeTab === 'users' && (
             <section className="tab-content">
               <h2>👥 User Management</h2>
               <p className="section-desc">Manage users, change roles, and delete accounts</p>
-              
+
               <div className="user-controls">
                 <div className="filter-group">
                   <label>Filter by Role:</label>
-                  <select 
-                    value={userFilter} 
+                  <select
+                    value={userFilter}
                     onChange={(e) => setUserFilter(e.target.value)}
                     className="filter-select"
                   >
@@ -456,7 +475,7 @@ const AdminDashboard = () => {
                 {filteredUsers.map((user) => (
                   <div key={user.id} className="table-row">
                     <div className="user-cell">
-                      <img 
+                      <img
                         src={getAvatarSrc(user.avatar)}
                         alt={user.name}
                         className="table-avatar"
@@ -472,7 +491,7 @@ const AdminDashboard = () => {
                       {user.status === 'active' ? '🟢' : '🔴'} {user.status}
                     </span>
                     <div className="actions-cell">
-                      <select 
+                      <select
                         className="role-select"
                         value={user.role}
                         onChange={(e) => handleRoleChange(user.id, e.target.value)}
@@ -481,7 +500,7 @@ const AdminDashboard = () => {
                         <option value="teacher">Teacher</option>
                         <option value="admin">Admin</option>
                       </select>
-                      <button 
+                      <button
                         className="delete-btn"
                         onClick={() => handleDeleteUser(user.id)}
                         title="Delete User"
@@ -500,7 +519,7 @@ const AdminDashboard = () => {
             <section className="tab-content">
               <h2>💬 Teacher Feedback</h2>
               <p className="section-desc">View and manage feedback from teachers (non-anonymous)</p>
-              
+
               <div className="feedback-stats">
                 <div className="feedback-stat-card">
                   <span className="stat-number">{teacherFeedback.length}</span>
@@ -520,7 +539,7 @@ const AdminDashboard = () => {
                 {teacherFeedback.length > 0 ? teacherFeedback.map((feedback) => (
                   <div key={feedback.id} className="feedback-card">
                     <div className="feedback-sender">
-                      <img 
+                      <img
                         src={getAvatarSrc(feedback.sender_avatar)}
                         alt={feedback.sender_name}
                         className="feedback-avatar"
@@ -548,7 +567,7 @@ const AdminDashboard = () => {
                     </div>
                     {feedback.status === 'pending' && (
                       <div className="feedback-actions">
-                        <button 
+                        <button
                           className="respond-btn"
                           onClick={() => {
                             const response = prompt('Enter your response:');
@@ -604,7 +623,7 @@ const AdminDashboard = () => {
             <section className="tab-content">
               <h2>🔍 RAG Search - System Wide</h2>
               <p className="section-desc">Search across all PDFs and content in the system</p>
-              
+
               <div className="search-container">
                 <div className="search-box">
                   <input
@@ -693,17 +712,17 @@ const AdminDashboard = () => {
             <section className="tab-content">
               <h2>📄 PDF Management</h2>
               <p className="section-desc">Upload, index, and manage course PDFs for RAG search</p>
-              
+
               <div className="pdf-upload-section">
                 <div className="upload-area">
                   <span className="upload-icon">📤</span>
                   <h3>Upload New PDF</h3>
                   <p>Upload course materials, notes, or question papers</p>
                   <label className="upload-btn-label">
-                    <input 
-                      type="file" 
-                      accept=".pdf" 
-                      onChange={handleUploadPDF} 
+                    <input
+                      type="file"
+                      accept=".pdf"
+                      onChange={handleUploadPDF}
                       disabled={uploadingPDF}
                       style={{display: 'none'}}
                     />
@@ -741,7 +760,7 @@ const AdminDashboard = () => {
                     <span className="date-cell">{pdf.created_at ? new Date(pdf.created_at).toLocaleDateString() : '--'}</span>
                     <div className="actions-cell">
                       {pdf.status !== 'indexed' && (
-                        <button 
+                        <button
                           className="index-btn"
                           onClick={() => handleIndexPDF(pdf.id)}
                           disabled={indexingPDF === pdf.id}
@@ -749,7 +768,7 @@ const AdminDashboard = () => {
                           {indexingPDF === pdf.id ? '⏳ Indexing...' : '🔄 Index'}
                         </button>
                       )}
-                      <button 
+                      <button
                         className="delete-btn"
                         onClick={() => handleDeletePDF(pdf.id, pdf.filename)}
                         title="Delete PDF"
@@ -772,7 +791,7 @@ const AdminDashboard = () => {
             <section className="tab-content">
               <h2>📊 System Analytics</h2>
               <p className="section-desc">Overview of RAG system performance and usage</p>
-              
+
               <div className="analytics-stats">
                 <div className="analytics-card">
                   <span className="analytics-icon">📈</span>
@@ -846,6 +865,39 @@ const AdminDashboard = () => {
                   <p className="lang-name">Hinglish</p>
                   <p className="lang-percent">--</p>
                 </div>
+              </div>
+              <h3>📉 Role Distribution Chart</h3>
+              <div className="chart-panel">
+                <ResponsiveContainer width="100%" height={280}>
+                  <PieChart>
+                    <Pie
+                      data={roleDistributionData}
+                      dataKey="value"
+                      nameKey="name"
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={90}
+                      fill="#f59e0b"
+                      label
+                    />
+                    <Tooltip />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+
+              <h3>📊 System Metrics Chart</h3>
+              <div className="chart-panel">
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={systemMetricsData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="name" />
+                    <YAxis />
+                    <Tooltip />
+                    <Legend />
+                    <Bar dataKey="value" fill="#f59e0b" />
+                  </BarChart>
+                </ResponsiveContainer>
               </div>
               <p className="section-desc" style={{marginTop: '1rem', fontSize: '0.9em'}}>
                 Language stats will appear once users start making searches
