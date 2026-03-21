@@ -1,6 +1,7 @@
 
 
-# 🎓 EduRag - AI-Powered Educational RAG Platform
+# 🎓 EduRag - AI-Powered Educational RAG Platform 
+by Team 109
 
 <p align="center">
   <strong>Retrieval Augmented Generation (RAG) platform for modern education — powered by Gemini AI & Supabase</strong>
