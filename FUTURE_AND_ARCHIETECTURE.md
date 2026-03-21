@@ -99,29 +99,29 @@ EduRag follows a **3-tier serverless architecture**:
 ```
 User Action           Frontend (React)         Backend (FastAPI)         Supabase          Gemini AI
 ───────────           ────────────────         ─────────────────         ────────          ─────────
-                                                                    
+
 Login                 POST /api/auth/login  →  Verify password hash  →  Query users table
-                      ← JWT token + user       ← User row                               
-                                                                    
+                      ← JWT token + user       ← User row
+
 RAG Search            POST /api/rag/search →   Embed query          →                     → gemini-embedding-001
-                                               Fetch all embeddings →  rag_embeddings     
-                                               Cosine similarity      (in-memory)        
-                                               Top-K chunks         →  pdf_chunks         
+                                               Fetch all embeddings →  rag_embeddings
+                                               Cosine similarity      (in-memory)
+                                               Top-K chunks         →  pdf_chunks
                                                Generate answer      →                     → gemini-3-flash
-                      ← AI answer + sources    Log to search_history→  search_history     
-                                                                    
-PDF Upload            POST /api/rag/upload →   Save file to storage →  Storage bucket     
-                                               Save metadata        →  pdfs table         
-                      ← PDF record                                                       
-                                                                    
-PDF Indexing          POST /api/rag/index  →   Download from storage←  Storage bucket     
-                                               Extract text+images    (pypdf)             
-                                               Chunk text (900 char)                      
+                      ← AI answer + sources    Log to search_history→  search_history
+
+PDF Upload            POST /api/rag/upload →   Save file to storage →  Storage bucket
+                                               Save metadata        →  pdfs table
+                      ← PDF record
+
+PDF Indexing          POST /api/rag/index  →   Download from storage←  Storage bucket
+                                               Extract text+images    (pypdf)
+                                               Chunk text (900 char)
                                                Embed each chunk     →                     → gemini-embedding-001
                                                Caption images       →                     → gemini-vision
-                                               Store chunks         →  pdf_chunks         
-                                               Store embeddings     →  rag_embeddings     
-                      ← Indexing complete       Update pdf status    →  pdfs.status        
+                                               Store chunks         →  pdf_chunks
+                                               Store embeddings     →  rag_embeddings
+                      ← Indexing complete       Update pdf status    →  pdfs.status
 ```
 
 ---
@@ -217,12 +217,12 @@ Step 5: AI Answer Generation
 Prompt to Gemini (gemini-3-flash-preview):
   "You are an educational assistant. Using ONLY the context below,
    answer the student's question. Cite sources.
-   
+
    Context:
    [Chunk 1 from file.pdf, page 3]
    [Chunk 2 from file.pdf, page 7]
    ...
-   
+
    Question: What is Object Oriented Programming?"
 
   ↓
@@ -420,4 +420,3 @@ Use Gemini to auto-generate quizzes from uploaded PDFs:
 - New tables: `quizzes`, `quiz_questions`, `quiz_attempts`
 
 ---
-
