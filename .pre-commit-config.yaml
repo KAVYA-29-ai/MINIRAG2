@@ -1,0 +1,29 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-json
+      - id: check-merge-conflict
+
+  - repo: local
+    hooks:
+      - id: flake8-local
+        name: flake8-local
+        entry: flake8 backend/main.py backend/models.py backend/routers/auth.py tests/test_models.py tests/test_auth_verification.py
+        language: system
+        pass_filenames: false
+
+      - id: pylint-local
+        name: pylint-local
+        entry: pylint --exit-zero --rcfile=.pylintrc backend/main.py backend/models.py backend/routers/auth.py
+        language: system
+        pass_filenames: false
+
+      - id: eslint-local
+        name: eslint-local
+        entry: npm run lint:js --
+        language: system
+        pass_filenames: false
