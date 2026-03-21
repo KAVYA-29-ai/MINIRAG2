@@ -2,14 +2,15 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: ["**"]
   pull_request:
     branches: [main]
 
 jobs:
-  build-and-test:
+  backend-tests:
+    name: Backend Tests (pytest)
     runs-on: ubuntu-latest
-    
+
     env:
       PYTHONPATH: ${{ github.workspace }}/backend
       GEMINI_API_KEY: test_key
@@ -17,24 +18,81 @@ jobs:
       SUPABASE_URL: http://localhost
       SUPABASE_KEY: test_key
       JWT_ALGORITHM: HS256
+      REQUIRE_EMAIL_VERIFICATION: "false"
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: '3.12'
 
-      - name: Install dependencies
+      - name: Install backend dependencies
         run: |
           pip install -r backend/requirements.txt
           pip install pytest pytest-asyncio httpx
 
-      - name: Run tests
+      - name: Run backend tests
         run: pytest tests/ -v
 
-      - name: Lint code
+  frontend-tests:
+    name: Frontend Tests (RTL/Jest)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Run frontend tests
+        run: npm run test:ci
+
+      - name: Build frontend
+        run: npm run build
+
+  lint-and-hooks:
+    name: Lint + Pre-commit
+    runs-on: ubuntu-latest
+
+    env:
+      PYTHONPATH: ${{ github.workspace }}/backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install project dependencies
         run: |
+          npm ci
+          pip install -r backend/requirements.txt
           pip install flake8
-          flake8 backend/ --max-line-length=120 --exit-zero
+          pip install pylint pre-commit
+
+      - name: Lint frontend (ESLint)
+        run: npm run lint:js
+
+      - name: Lint backend (flake8 + pylint)
+        run: |
+          flake8 backend/main.py backend/models.py backend/routers/auth.py tests/test_models.py tests/test_auth_verification.py
+          pylint --exit-zero --rcfile=.pylintrc backend/main.py backend/models.py backend/routers/auth.py
+
+      - name: Run pre-commit checks
+        run: pre-commit run --all-files
