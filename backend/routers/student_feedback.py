@@ -58,6 +58,27 @@ async def get_student_feedback(
             .order("created_at", desc=True)
             .execute()
         )
-        return resp.data or []
+        feedback_items = resp.data or []
+
+        sender_ids = list({item.get("sender_id") for item in feedback_items if item.get("sender_id")})
+        sender_lookup = {}
+        if sender_ids:
+            user_resp = (
+                sb.table("users")
+                .select("id,name,institution_id")
+                .in_("id", sender_ids)
+                .execute()
+            )
+            sender_lookup = {user["id"]: user for user in (user_resp.data or [])}
+
+        for item in feedback_items:
+            user = sender_lookup.get(item.get("sender_id")) or {}
+            if item.get("is_anonymous"):
+                item["sender_name"] = None
+                item["sender_institution_id"] = None
+            else:
+                item["sender_name"] = user.get("name")
+                item["sender_institution_id"] = user.get("institution_id")
+        return feedback_items
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

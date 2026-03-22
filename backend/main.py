@@ -17,6 +17,7 @@ Routers are imported from the backend/routers/ directory.
 from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 import time
 from collections import defaultdict, deque
 import os
@@ -62,13 +63,12 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-from slowapi import Limiter
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
-from slowapi.util import get_remote_address
 from slowapi.extension import _rate_limit_exceeded_handler
 from dotenv import load_dotenv
 from pathlib import Path
+from core.rate_limit import limiter
 from services.realtime import WebSocketConnectionManager
 
 # Load environment variables
@@ -85,7 +85,6 @@ app = FastAPI(
     version="1.0.0"
 )
 
-limiter = Limiter(key_func=get_remote_address, default_limits=["60/minute"])
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
@@ -107,17 +106,17 @@ async def generic_exception_handler(request: Request, exc: Exception):
 app.add_middleware(RateLimitMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(SlowAPIMiddleware)
+app.add_middleware(
+    TrustedHostMiddleware,
+    allowed_hosts=["*.vercel.app", "localhost", "127.0.0.1", "testserver"],
+)
 
-# CORS configuration - Allow Vercel frontend + dev origins + Codespaces
+frontend_url = os.getenv("FRONTEND_URL")
+
+# CORS configuration - allow only configured frontend origin
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-        "http://localhost:8000",
-        "http://127.0.0.1:8000",
-    ],
-    allow_origin_regex=r"https://.*(\.vercel\.app|\.app\.github\.dev|\.preview\.app\.github\.dev)",
+    allow_origins=[frontend_url] if frontend_url else [],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

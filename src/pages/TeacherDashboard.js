@@ -5,6 +5,7 @@
  */
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import AnimatedBackground from '../components/AnimatedBackground';
 import { authAPI, ragAPI, usersAPI, feedbackAPI, studentFeedbackAPI, analyticsAPI } from '../services/api';
 import { handleError } from '../services/errorHandler';
@@ -19,18 +20,22 @@ const TeacherDashboard = () => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('rag-search');
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchLanguage, setSearchLanguage] = useState('auto');
   const [searchResults, setSearchResults] = useState([]);
   const [generatedAnswer, setGeneratedAnswer] = useState('');
   const [searching, setSearching] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [operationStatus, setOperationStatus] = useState('');
 
   // User data
   const [currentUser, setCurrentUser] = useState(null);
   const [userName, setUserName] = useState('');
   const [editName, setEditName] = useState('');
   const [selectedAvatar, setSelectedAvatar] = useState('male');
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [profileSaving, setProfileSaving] = useState(false);
 
   // Teachers from API
   const [teachers, setTeachers] = useState([]);
@@ -44,6 +49,12 @@ const TeacherDashboard = () => {
   const [feedbackCategory, setFeedbackCategory] = useState('rag');
   const [myFeedback, setMyFeedback] = useState([]);
   const [studentFeedbackList, setStudentFeedbackList] = useState([]);
+  const [feedbackSentiment, setFeedbackSentiment] = useState({
+    total: 0,
+    positive_percentage: 0,
+    negative_percentage: 0,
+    neutral_percentage: 0,
+  });
 
   // Analytics
   const [analytics, setAnalytics] = useState(null);
@@ -55,6 +66,12 @@ const TeacherDashboard = () => {
 
   // Search history
   const [searchHistory, setSearchHistory] = useState([]);
+
+  const getPreferenceStorageKey = (user) => {
+    const role = user?.role || 'teacher';
+    const id = user?.id || 'current';
+    return `edurag_language_pref_${role}_${id}`;
+  };
 
   const getAvatarSrc = avatarSource;
   const handleAvatarError = imageFallbackHandler(AVATAR_PLACEHOLDER);
@@ -76,6 +93,10 @@ const TeacherDashboard = () => {
       setUserName(user.name);
       setEditName(user.name);
       setSelectedAvatar(user.avatar || 'male');
+      const savedLanguage = localStorage.getItem(getPreferenceStorageKey(user));
+      if (savedLanguage) {
+        setSearchLanguage(savedLanguage);
+      }
 
       // Load all data independently — one failure must not block others
       const results = await Promise.allSettled([
@@ -86,6 +107,7 @@ const TeacherDashboard = () => {
         ragAPI.getPDFs(),
         ragAPI.getSearchHistory(),
         studentFeedbackAPI.getAll(),
+        analyticsAPI.getFeedbackSentiment(),
       ]);
 
       if (results[0].status === 'fulfilled') {
@@ -98,6 +120,12 @@ const TeacherDashboard = () => {
       if (results[4].status === 'fulfilled') setPdfs(results[4].value || []);
       if (results[5].status === 'fulfilled') setSearchHistory(results[5].value || []);
       if (results[6].status === 'fulfilled') setStudentFeedbackList(results[6].value || []);
+      if (results[7].status === 'fulfilled') setFeedbackSentiment(results[7].value || {
+        total: 0,
+        positive_percentage: 0,
+        negative_percentage: 0,
+        neutral_percentage: 0,
+      });
     } catch (error) {
       console.error('Error loading data:', error);
     } finally {
@@ -109,12 +137,12 @@ const TeacherDashboard = () => {
     if (!searchQuery.trim()) return;
     setSearching(true);
     try {
-      const results = await ragAPI.search(searchQuery);
+      const results = await ragAPI.search(searchQuery, searchLanguage);
       setSearchResults(results.results || []);
       setGeneratedAnswer(results.generated_answer || '');
-      setOperationStatus(`Search complete: ${results.total_results || 0} matches.`);
+      toast.success(`Search complete: ${results.total_results || 0} matches. Language: ${(results.language || searchLanguage).toUpperCase()}`);
     } catch (error) {
-      setOperationStatus('Search failed. Please try again.');
+      toast.error('Search failed. Please try again.');
       handleError(error, 'Search failed.');
     } finally {
       setSearching(false);
@@ -128,7 +156,7 @@ const TeacherDashboard = () => {
         category: feedbackCategory,
         message: feedbackMessage
       });
-      setOperationStatus('Feedback sent to admin successfully.');
+      toast.success('Feedback sent to admin successfully.');
       setFeedbackMessage('');
       // Reload feedback
       const feedback = await feedbackAPI.getMine();
@@ -149,7 +177,7 @@ const TeacherDashboard = () => {
     setUploadingPDF(true);
     try {
       await ragAPI.uploadPDF(file);
-      setOperationStatus(`Uploaded ${file.name}. Click Index to make it searchable.`);
+      toast.success(`Uploaded ${file.name}. Click Index to make it searchable.`);
       const pdfList = await ragAPI.getPDFs();
       setPdfs(pdfList);
     } catch (error) {
@@ -164,7 +192,7 @@ const TeacherDashboard = () => {
     setIndexingPDF(pdfId);
     try {
       const result = await ragAPI.indexPDF(pdfId);
-      setOperationStatus(result.message || 'PDF indexed successfully.');
+      toast.success(result.message || 'PDF indexed successfully.');
       const pdfList = await ragAPI.getPDFs();
       setPdfs(pdfList);
     } catch (error) {
@@ -179,7 +207,7 @@ const TeacherDashboard = () => {
     try {
       await ragAPI.deletePDF(pdfId);
       setPdfs(pdfs.filter(p => p.id !== pdfId));
-      setOperationStatus(`Deleted ${filename}.`);
+      toast.success(`Deleted ${filename}.`);
     } catch (error) {
       handleError(error, 'Delete failed.');
     }
@@ -189,6 +217,11 @@ const TeacherDashboard = () => {
     () => teachers.filter((teacher) => matchesQuery(teacherSearch, [teacher.name, teacher.institution_id])),
     [teachers, teacherSearch]
   );
+
+  useEffect(() => {
+    if (!currentUser) return;
+    localStorage.setItem(getPreferenceStorageKey(currentUser), searchLanguage);
+  }, [currentUser, searchLanguage]);
 
   if (loading) {
     return (
@@ -279,7 +312,12 @@ const TeacherDashboard = () => {
           </div>
           <button
             className="edit-profile-btn"
-            onClick={() => setShowProfileModal(true)}
+            onClick={() => {
+              setCurrentPassword('');
+              setNewPassword('');
+              setConfirmNewPassword('');
+              setShowProfileModal(true);
+            }}
           >
             Edit Profile
           </button>
@@ -326,33 +364,87 @@ const TeacherDashboard = () => {
                   </button>
                 </div>
               </div>
+
+              <div className="form-group-modal">
+                <label>Current Password (optional)</label>
+                <input
+                  type="password"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  placeholder="Enter current password"
+                  className="profile-input"
+                />
+              </div>
+
+              <div className="form-group-modal">
+                <label>New Password (optional)</label>
+                <input
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="Minimum 6 characters"
+                  className="profile-input"
+                />
+              </div>
+
+              <div className="form-group-modal">
+                <label>Confirm New Password</label>
+                <input
+                  type="password"
+                  value={confirmNewPassword}
+                  onChange={(e) => setConfirmNewPassword(e.target.value)}
+                  placeholder="Re-enter new password"
+                  className="profile-input"
+                />
+              </div>
             </div>
 
             <div className="profile-modal-buttons">
               <button
                 className="save-profile-btn"
                 onClick={async () => {
+                  setProfileSaving(true);
                   try {
+                    if (newPassword || confirmNewPassword || currentPassword) {
+                      if (!currentPassword || !newPassword || !confirmNewPassword) {
+                        throw new Error('Fill all password fields to change password.');
+                      }
+                      if (newPassword !== confirmNewPassword) {
+                        throw new Error('New password and confirm password do not match.');
+                      }
+                      await authAPI.changePassword(currentPassword, newPassword);
+                    }
                     await usersAPI.update(currentUser.id, {
                       name: editName,
                       avatar: selectedAvatar
                     });
                     setUserName(editName);
                     setCurrentUser({ ...currentUser, name: editName, avatar: selectedAvatar });
+                    toast.success('Profile updated successfully.');
+                    setCurrentPassword('');
+                    setNewPassword('');
+                    setConfirmNewPassword('');
+                    setShowProfileModal(false);
                   } catch (err) {
                     handleError(err, 'Failed to update profile');
+                  } finally {
+                    setProfileSaving(false);
                   }
-                  setShowProfileModal(false);
                 }}
+                disabled={profileSaving}
               >
-                Save Changes
+                {profileSaving ? 'Saving...' : 'Save Changes'}
               </button>
               <button
                 className="cancel-profile-btn"
                 onClick={() => {
                   setEditName(userName);
+                  setCurrentPassword('');
+                  setNewPassword('');
+                  setConfirmNewPassword('');
                   setShowProfileModal(false);
                 }}
+                disabled={profileSaving}
               >
                 Cancel
               </button>
@@ -378,7 +470,6 @@ const TeacherDashboard = () => {
         </header>
 
         <div className="content-area">
-          {operationStatus && <div className="operation-status">{operationStatus}</div>}
           {/* RAG Search Tab - Search Student PDFs */}
           {activeTab === 'rag-search' && (
             <section className="tab-content">
@@ -402,11 +493,15 @@ const TeacherDashboard = () => {
 
                 <div className="language-selector">
                   <label>Language Preference:</label>
-                  <select defaultValue="english">
+                  <select value={searchLanguage} onChange={(e) => setSearchLanguage(e.target.value)}>
+                    <option value="auto">Auto Detect</option>
                     <option value="english">English</option>
                     <option value="hindi">Hindi</option>
                     <option value="hinglish">Hinglish</option>
                   </select>
+                  <p className="section-desc" style={{ marginTop: '0.5rem' }}>
+                    Current preference: <strong>{searchLanguage.toUpperCase()}</strong>
+                  </p>
                 </div>
 
                 {generatedAnswer ? (
@@ -560,6 +655,12 @@ const TeacherDashboard = () => {
             <section className="tab-content">
               <h2>👥 Faculty Members</h2>
               <p className="section-desc">View other teachers in your institution</p>
+
+              <div className="stats-row" style={{marginBottom: '1rem'}}>
+                <span className="stat-pill">👥 {filteredTeachers.length} Visible</span>
+                <span className="stat-pill teacher">🟢 {filteredTeachers.filter((t) => t.status === 'active').length} Active</span>
+                <span className="stat-pill">⚫ {filteredTeachers.filter((t) => t.status !== 'active').length} Inactive</span>
+              </div>
 
               <div className="teachers-grid">
                 {filteredTeachers.length > 0 ? filteredTeachers.map((teacher) => (
@@ -746,6 +847,8 @@ const TeacherDashboard = () => {
                 <span className="stat-pill">📬 {studentFeedbackList.length} Total</span>
                 <span className="stat-pill student">🕵️ {studentFeedbackList.filter(f => f.is_anonymous).length} Anonymous</span>
                 <span className="stat-pill teacher">👤 {studentFeedbackList.filter(f => !f.is_anonymous).length} Identified</span>
+                <span className="stat-pill">✅ {feedbackSentiment?.positive_percentage || 0}% Positive</span>
+                <span className="stat-pill">⚠️ {feedbackSentiment?.negative_percentage || 0}% Negative</span>
               </div>
 
               <div className="feedback-history">
@@ -754,7 +857,9 @@ const TeacherDashboard = () => {
                     <div key={index} className="feedback-item">
                       <div className="feedback-header">
                         <span className="feedback-category">
-                          {fb.is_anonymous ? '🕵️ Anonymous' : `👤 Student #${fb.sender_id || 'Unknown'}`}
+                          {fb.is_anonymous
+                            ? '🕵️ Anonymous'
+                            : `👤 ${fb.sender_name || `Student #${fb.sender_id || 'Unknown'}`} ${fb.sender_institution_id ? `(${fb.sender_institution_id})` : ''}`}
                         </span>
                         <span className="feedback-date">{new Date(fb.created_at).toLocaleDateString()}</span>
                       </div>

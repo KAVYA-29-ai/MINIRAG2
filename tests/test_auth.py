@@ -32,6 +32,7 @@ def _set(role="student", data=None):
 @pytest.fixture(autouse=True)
 def _reset():
     _mock_sb.reset_mock()
+    _mock_sb.table.side_effect = None
     _ms._main._ip_buckets.clear()
     _mock_sb.table.return_value.select.return_value.eq.return_value.limit.return_value.execute.return_value = MagicMock(data=[])
     _mock_sb.table.return_value.insert.return_value.execute.return_value = MagicMock(data=[])

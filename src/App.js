@@ -5,6 +5,7 @@
  */
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { Toaster } from 'react-hot-toast';
 import HomePage from './pages/HomePage';
 import LoginRegister from './pages/LoginRegister';
 import StudentDashboard from './pages/StudentDashboard';
@@ -15,6 +16,7 @@ import './App.css';
 function App() {
   return (
     <Router>
+      <Toaster position="top-right" toastOptions={{ duration: 2800 }} />
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/auth" element={<LoginRegister />} />

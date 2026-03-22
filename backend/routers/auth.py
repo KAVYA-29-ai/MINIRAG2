@@ -5,16 +5,19 @@ Authentication Router for MINI-RAG Backend
 Handles user registration, login, JWT token management, and authentication-related endpoints.
 All user data is stored in Supabase.
 """
-from fastapi import APIRouter, HTTPException, Depends, Query
+from fastapi import APIRouter, HTTPException, Depends, Query, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from passlib.context import CryptContext
 from jose import JWTError, jwt
 from datetime import datetime, timedelta, timezone
 import os
+from urllib.parse import urlencode
 from dotenv import load_dotenv
+from pydantic import BaseModel, EmailStr
 
 from models import UserRegister, UserLogin, Token
 from database import get_supabase
+from core.rate_limit import limiter
 
 load_dotenv()
 
@@ -27,9 +30,22 @@ JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
 EMAIL_VERIFICATION_REQUIRED = os.getenv("REQUIRE_EMAIL_VERIFICATION", "false").lower() in {"1", "true", "yes"}
 EMAIL_VERIFICATION_EXPIRE_HOURS = int(os.getenv("EMAIL_VERIFICATION_EXPIRE_HOURS", "24"))
+AUTH_RATE_LIMIT = os.getenv("AUTH_RATE_LIMIT", "5/minute")
+
+# Temporary product decision: keep verification OFF until resend flow is implemented.
+EMAIL_VERIFICATION_REQUIRED = False
 
 if not JWT_SECRET:
     raise RuntimeError("JWT_SECRET is required. Set it in your environment or .env file.")
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -118,7 +134,8 @@ def create_email_verification_token(user_id: int, email: str) -> str:
 
 
 @router.post("/register", response_model=Token)
-async def register(user_data: UserRegister):
+@limiter.limit(AUTH_RATE_LIMIT)
+async def register(request: Request, user_data: UserRegister):
     """
     Register a new user and store their data in Supabase.
     Returns a JWT token and user info on success.
@@ -188,7 +205,8 @@ async def register(user_data: UserRegister):
 
 
 @router.post("/login", response_model=Token)
-async def login(user_data: UserLogin):
+@limiter.limit(AUTH_RATE_LIMIT)
+async def login(request: Request, user_data: UserLogin):
     """
     Login a user by verifying credentials against the Supabase users table.
     Returns a JWT token and user info on success.
@@ -236,6 +254,70 @@ async def get_me(current_user: dict = Depends(get_current_user)):
 async def logout():
     """Logout endpoint — stateless, for client-side token removal."""
     return {"message": "Logged out successfully"}
+
+
+@router.post("/forgot-password")
+async def forgot_password(payload: ForgotPasswordRequest):
+    """Trigger Supabase Auth password reset email for a user."""
+    try:
+        sb = get_supabase()
+        redirect_to = os.getenv("PASSWORD_RESET_REDIRECT_TO")
+        options = {"redirect_to": redirect_to} if redirect_to else {}
+        sb.auth.reset_password_email(str(payload.email), options=options)
+        return {
+            "message": "If this email exists, a password reset link has been sent.",
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.api_route("/change-password", methods=["POST", "PATCH", "PUT"])
+async def change_password(
+    payload: ChangePasswordRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """Allow an authenticated user to change their password."""
+    if len(payload.new_password or "") < 6:
+        raise HTTPException(status_code=400, detail="New password must be at least 6 characters")
+    try:
+        sb = get_supabase()
+        resp = (
+            sb.table("users")
+            .select("id,password_hash")
+            .eq("id", current_user["id"])
+            .limit(1)
+            .execute()
+        )
+        user = resp.data[0] if resp.data else None
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        if not verify_password(payload.current_password, user["password_hash"]):
+            raise HTTPException(status_code=400, detail="Current password is incorrect")
+
+        new_hash = get_password_hash(payload.new_password)
+        sb.table("users").update({"password_hash": new_hash}).eq("id", current_user["id"]).execute()
+        return {"message": "Password changed successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/google-login-url")
+async def google_login_url():
+    """Return Google OAuth authorize URL for Supabase Auth."""
+    supabase_url = os.getenv("SUPABASE_URL")
+    if not supabase_url:
+        raise HTTPException(status_code=503, detail="SUPABASE_URL is not configured")
+
+    params = {"provider": "google"}
+    redirect_to = os.getenv("GOOGLE_OAUTH_REDIRECT_TO")
+    if redirect_to:
+        params["redirect_to"] = redirect_to
+
+    return {
+        "url": f"{supabase_url}/auth/v1/authorize?{urlencode(params)}",
+    }
 
 
 @router.get("/verify-email")
