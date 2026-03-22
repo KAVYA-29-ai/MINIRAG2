@@ -128,4 +128,21 @@
 
 ---
 
+## 🗓️ March 22, 2026 — Updates
+
+- [x] Added `pytest.ini` at root (`testpaths = tests`, `python_files = test_*.py`)
+- [x] Updated CI backend command to include coverage XML output
+- [x] Added backend tests:
+	- `tests/test_users.py` (basic CRUD coverage)
+	- `tests/test_analytics.py` (summary and usage-by-role)
+	- `tests/test_chat.py` (chat endpoints + websocket basic flow)
+- [x] Stabilized shared mock behavior in auth-related tests
+- [x] Added auth endpoint rate limits via SlowAPI (`register` and `login`)
+- [x] Tightened CORS to explicit `FRONTEND_URL` allowlist
+- [x] Added `TrustedHostMiddleware` host allowlist
+- [x] Added `bleach>=6.1.0` and integrated `bleach.clean()` in model text hygiene
+- [x] Added testing and CI commands section in README
+
+---
+
 > 📄 For future roadmap and planned features, see [FUTURE_SCOPE_AND_ARCHITECTURE.md](FUTURE_SCOPE_AND_ARCHITECTURE.md)

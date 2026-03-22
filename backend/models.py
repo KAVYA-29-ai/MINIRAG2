@@ -11,7 +11,8 @@ from enum import Enum
 import re
 from typing import List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+import bleach
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 
 class UserRole(str, Enum):
@@ -49,8 +50,8 @@ class TextHygiene:
 
     @classmethod
     def plain_text(cls, value: Optional[str]) -> str:
-        """Strip html-like tags and normalize whitespace."""
-        without_tags = cls.TAG_PATTERN.sub("", value or "")
+        """Strip html markup safely and normalize whitespace."""
+        without_tags = bleach.clean(value or "", tags=[], attributes={}, strip=True)
         normalized = cls.MULTISPACE_PATTERN.sub(" ", without_tags).strip()
         return normalized
 
@@ -70,7 +71,7 @@ class UserRegister(BaseModel):
 
     name: str = Field(min_length=1, max_length=80)
     institution_id: str = Field(min_length=3, max_length=50)
-    email: Optional[str] = None
+    email: Optional[EmailStr] = None
     password: str = Field(min_length=6, max_length=128)
     avatar: str = Field(default="male")
     role: UserRole = UserRole.student
@@ -122,7 +123,7 @@ class UserBase(BaseModel):
     id: Optional[int] = None
     name: str
     institution_id: str
-    email: Optional[str] = None
+    email: Optional[EmailStr] = None
     role: UserRole
     avatar: str
     status: str = "active"
@@ -146,7 +147,7 @@ class UserResponse(BaseModel):
     id: int
     name: str
     institution_id: str
-    email: Optional[str] = None
+    email: Optional[EmailStr] = None
     role: UserRole
     avatar: str
     status: str
@@ -214,7 +215,7 @@ class RAGQuery(BaseModel):
     @classmethod
     def normalize_language(cls, value: str) -> str:
         """Normalize language values into supported product options."""
-        allowed = {"english", "hindi", "hinglish"}
+        allowed = {"english", "hindi", "hinglish", "auto"}
         normalized = (value or "english").strip().lower()
         if normalized not in allowed:
             return "english"

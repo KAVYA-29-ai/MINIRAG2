@@ -31,10 +31,10 @@ jobs:
       - name: Install backend dependencies
         run: |
           pip install -r backend/requirements.txt
-          pip install pytest pytest-asyncio httpx
+          pip install pytest pytest-asyncio pytest-cov httpx
 
       - name: Run backend tests
-        run: pytest tests/ -v
+        run: pytest tests/ -v --cov=backend --cov-report=xml
 
   frontend-tests:
     name: Frontend Tests (RTL/Jest)

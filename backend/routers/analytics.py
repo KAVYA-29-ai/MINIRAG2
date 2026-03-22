@@ -7,11 +7,37 @@ Only admins can access analytics endpoints.
 """
 from fastapi import APIRouter, HTTPException, Depends
 from datetime import datetime, timedelta
+import re
 
 from database import get_supabase
 from core.rbac import require_roles
 
 router = APIRouter()
+
+POSITIVE_WORDS = {
+    "good", "great", "helpful", "clear", "excellent", "amazing", "nice", "useful", "easy", "improved",
+    "acha", "accha", "badhiya", "sahi", "shukriya", "dhanyavaad", "pasand",
+}
+NEGATIVE_WORDS = {
+    "bad", "poor", "confusing", "slow", "issue", "problem", "difficult", "broken", "error", "worst",
+    "bekar", "bekaar", "galat", "kharab", "faltu", "nahi", "not", "hard",
+}
+
+
+def _classify_feedback_sentiment(message: str) -> str:
+    text = (message or "").lower()
+    tokens = re.findall(r"[a-zA-Z\u0900-\u097F']+", text)
+    if not tokens:
+        return "neutral"
+
+    positive_score = sum(1 for token in tokens if token in POSITIVE_WORDS)
+    negative_score = sum(1 for token in tokens if token in NEGATIVE_WORDS)
+
+    if positive_score > negative_score:
+        return "positive"
+    if negative_score > positive_score:
+        return "negative"
+    return "neutral"
 
 
 @router.get("/summary")
@@ -135,5 +161,31 @@ async def get_top_topics(limit: int = 10, current_user: dict = Depends(require_r
         from collections import Counter
         counts = Counter(r["query"] for r in rows if r.get("query"))
         return [{"topic": q, "count": c, "trend": "stable"} for q, c in counts.most_common(limit)]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/feedback-sentiment")
+async def get_feedback_sentiment(current_user: dict = Depends(require_roles("admin", "teacher"))):
+    """Return positive/negative/neutral sentiment breakdown for student feedback."""
+    try:
+        sb = get_supabase()
+        rows = sb.table("student_feedback").select("message").execute().data or []
+
+        summary = {"positive": 0, "negative": 0, "neutral": 0}
+        for row in rows:
+            sentiment = _classify_feedback_sentiment(row.get("message", ""))
+            summary[sentiment] += 1
+
+        total = max(len(rows), 1)
+        return {
+            "total": len(rows),
+            "positive": summary["positive"],
+            "negative": summary["negative"],
+            "neutral": summary["neutral"],
+            "positive_percentage": round((summary["positive"] / total) * 100, 1),
+            "negative_percentage": round((summary["negative"] / total) * 100, 1),
+            "neutral_percentage": round((summary["neutral"] / total) * 100, 1),
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

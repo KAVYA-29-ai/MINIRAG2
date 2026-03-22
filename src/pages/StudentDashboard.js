@@ -11,6 +11,7 @@
  */
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import AnimatedBackground from '../components/AnimatedBackground';
 import { authAPI, ragAPI, usersAPI, studentFeedbackAPI } from '../services/api';
 import { handleError } from '../services/errorHandler';
@@ -41,6 +42,7 @@ const StudentDashboard = () => {
    * @type {[string, Function]}
    */
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchLanguage, setSearchLanguage] = useState('auto');
 
   /**
    * Results returned from RAG search
@@ -60,13 +62,16 @@ const StudentDashboard = () => {
   const [searching, setSearching] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [operationStatus, setOperationStatus] = useState('');
 
   // --- User profile state ---
   const [currentUser, setCurrentUser] = useState(null); // User object from API
   const [userName, setUserName] = useState(''); // Display name
   const [editName, setEditName] = useState(''); // Name being edited
   const [selectedAvatar, setSelectedAvatar] = useState('male'); // Avatar selection
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [profileSaving, setProfileSaving] = useState(false);
 
   // --- Buddies system ---
   const [buddies, setBuddies] = useState([]); // List of buddies
@@ -83,6 +88,12 @@ const StudentDashboard = () => {
   // --- Feedback ---
   const [feedbackMessage, setFeedbackMessage] = useState('');
   const [isAnonymous, setIsAnonymous] = useState(true);
+
+  const getPreferenceStorageKey = (user) => {
+    const role = user?.role || 'student';
+    const id = user?.id || 'current';
+    return `edurag_language_pref_${role}_${id}`;
+  };
 
   /**
    * Get avatar image source by gender
@@ -124,6 +135,10 @@ const StudentDashboard = () => {
       setUserName(user.name);
       setEditName(user.name);
       setSelectedAvatar(user.avatar || 'male');
+      const savedLanguage = localStorage.getItem(getPreferenceStorageKey(user));
+      if (savedLanguage) {
+        setSearchLanguage(savedLanguage);
+      }
 
       // Load all data independently
       setLoadingRecommendations(true);
@@ -162,12 +177,12 @@ const StudentDashboard = () => {
     if (!searchQuery.trim()) return;
     setSearching(true);
     try {
-      const results = await ragAPI.search(searchQuery);
+      const results = await ragAPI.search(searchQuery, searchLanguage);
       setSearchResults(results.results || []);
       setGeneratedAnswer(results.generated_answer || '');
       const history = await ragAPI.getSearchHistory(50);
       setSearchHistory(history || []);
-      setOperationStatus(`Found ${results.total_results || 0} results.`);
+      toast.success(`Found ${results.total_results || 0} results. Language: ${(results.language || searchLanguage).toUpperCase()}`);
     } catch (error) {
       handleError(error, 'Search failed. Please try again.');
     } finally {
@@ -182,7 +197,7 @@ const StudentDashboard = () => {
     if (!feedbackMessage.trim()) return;
     try {
       await studentFeedbackAPI.send(feedbackMessage, isAnonymous);
-      setOperationStatus('Feedback sent successfully.');
+      toast.success('Feedback sent successfully.');
       setFeedbackMessage('');
     } catch (error) {
       handleError(error, 'Failed to send feedback.');
@@ -199,17 +214,17 @@ const StudentDashboard = () => {
    */
   const handleGenerateStudyPlan = async () => {
     if (!searchQuery.trim()) {
-      setOperationStatus('Type a topic first to generate a study plan.');
+      toast('Type a topic first to generate a study plan.');
       return;
     }
     setStudyPlanLoading(true);
     try {
-      const planResponse = await ragAPI.generateStudyPlan(searchQuery, 'english');
+      const planResponse = await ragAPI.generateStudyPlan(searchQuery, searchLanguage);
       setStudyPlan(planResponse?.study_plan || 'No plan generated.');
-      setOperationStatus('Study plan generated successfully.');
+      toast.success('Study plan generated successfully.');
     } catch (error) {
       handleError(error, 'Failed to generate study plan.');
-      setOperationStatus('Study plan generation failed.');
+      toast.error('Study plan generation failed.');
     } finally {
       setStudyPlanLoading(false);
     }
@@ -270,6 +285,11 @@ const StudentDashboard = () => {
       (item.language || '').toLowerCase().includes(q)
     ));
   }, [searchHistory, historyFilter]);
+
+  useEffect(() => {
+    if (!currentUser) return;
+    localStorage.setItem(getPreferenceStorageKey(currentUser), searchLanguage);
+  }, [currentUser, searchLanguage]);
 
   useEffect(() => {
     if (activeTab !== 'chatroom') return undefined;
@@ -373,7 +393,12 @@ const StudentDashboard = () => {
           </div>
           <button
             className="edit-profile-btn"
-            onClick={() => setShowProfileModal(true)}
+            onClick={() => {
+              setCurrentPassword('');
+              setNewPassword('');
+              setConfirmNewPassword('');
+              setShowProfileModal(true);
+            }}
           >
             Edit Profile
           </button>
@@ -420,33 +445,87 @@ const StudentDashboard = () => {
                   </button>
                 </div>
               </div>
+
+              <div className="form-group-modal">
+                <label>Current Password (optional)</label>
+                <input
+                  type="password"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  placeholder="Enter current password"
+                  className="profile-input"
+                />
+              </div>
+
+              <div className="form-group-modal">
+                <label>New Password (optional)</label>
+                <input
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="Minimum 6 characters"
+                  className="profile-input"
+                />
+              </div>
+
+              <div className="form-group-modal">
+                <label>Confirm New Password</label>
+                <input
+                  type="password"
+                  value={confirmNewPassword}
+                  onChange={(e) => setConfirmNewPassword(e.target.value)}
+                  placeholder="Re-enter new password"
+                  className="profile-input"
+                />
+              </div>
             </div>
 
             <div className="profile-modal-buttons">
               <button
                 className="save-profile-btn"
                 onClick={async () => {
+                  setProfileSaving(true);
                   try {
+                    if (newPassword || confirmNewPassword || currentPassword) {
+                      if (!currentPassword || !newPassword || !confirmNewPassword) {
+                        throw new Error('Fill all password fields to change password.');
+                      }
+                      if (newPassword !== confirmNewPassword) {
+                        throw new Error('New password and confirm password do not match.');
+                      }
+                      await authAPI.changePassword(currentPassword, newPassword);
+                    }
                     await usersAPI.update(currentUser.id, {
                       name: editName,
                       avatar: selectedAvatar
                     });
                     setUserName(editName);
                     setCurrentUser({ ...currentUser, name: editName, avatar: selectedAvatar });
+                    toast.success('Profile updated successfully.');
+                    setCurrentPassword('');
+                    setNewPassword('');
+                    setConfirmNewPassword('');
+                    setShowProfileModal(false);
                   } catch (err) {
                     handleError(err, 'Failed to update profile');
+                  } finally {
+                    setProfileSaving(false);
                   }
-                  setShowProfileModal(false);
                 }}
+                disabled={profileSaving}
               >
-                Save Changes
+                {profileSaving ? 'Saving...' : 'Save Changes'}
               </button>
               <button
-                className="close-modal-btn"
+                className="cancel-profile-btn"
                 onClick={() => {
                   setEditName(userName);
+                  setCurrentPassword('');
+                  setNewPassword('');
+                  setConfirmNewPassword('');
                   setShowProfileModal(false);
                 }}
+                disabled={profileSaving}
               >
                 Cancel
               </button>
@@ -474,7 +553,6 @@ const StudentDashboard = () => {
         </header>
 
         <div className="content-area">
-          {operationStatus && <div className="operation-status">{operationStatus}</div>}
           {/* RAG Search Tab */}
           {activeTab === 'rag-search' && (
             <section className="tab-content rag-search-section">
@@ -496,11 +574,15 @@ const StudentDashboard = () => {
 
                 <div className="language-selector">
                   <label>Language Preference:</label>
-                  <select>
-                    <option>English</option>
-                    <option>Hindi</option>
-                    <option>Hinglish</option>
+                  <select value={searchLanguage} onChange={(e) => setSearchLanguage(e.target.value)}>
+                    <option value="auto">Auto Detect</option>
+                    <option value="english">English</option>
+                    <option value="hindi">Hindi</option>
+                    <option value="hinglish">Hinglish</option>
                   </select>
+                  <p className="section-desc" style={{ marginTop: '0.5rem' }}>
+                    Current preference: <strong>{searchLanguage.toUpperCase()}</strong>
+                  </p>
                 </div>
               </div>
 
@@ -565,6 +647,11 @@ const StudentDashboard = () => {
           {activeTab === 'buddies' && (
             <section className="tab-content buddies-section">
               <h2>Student Buddies</h2>
+              <div className="stats-row" style={{ marginBottom: '1rem' }}>
+                <span className="stat-pill">👥 {filteredBuddies.length} Visible</span>
+                <span className="stat-pill student">🟢 {filteredBuddies.filter((b) => b.status === 'active').length} Active</span>
+                <span className="stat-pill teacher">⚫ {filteredBuddies.filter((b) => b.status !== 'active').length} Inactive</span>
+              </div>
               <div className="buddies-grid">
                 {filteredBuddies.length > 0 ? filteredBuddies.map((buddy) => (
                   <div key={buddy.id} className="buddy-card">
@@ -576,7 +663,9 @@ const StudentDashboard = () => {
                     />
                     <h3>{buddy.name}</h3>
                     <p className="buddy-id">ID: {buddy.institution_id}</p>
-                    <p className="buddy-status">{buddy.status === 'active' ? 'Active' : 'Inactive'}</p>
+                    <p className={`buddy-status ${buddy.status === 'active' ? 'active' : 'inactive'}`}>
+                      {buddy.status === 'active' ? '🟢 Active' : '⚫ Inactive'}
+                    </p>
                   </div>
                 )) : (
                   <p className="no-data">No other students found</p>
@@ -606,11 +695,24 @@ const StudentDashboard = () => {
                     <input
                       type="checkbox"
                       id="identity-toggle"
-                      checked={!isAnonymous}
-                      onChange={(e) => setIsAnonymous(!e.target.checked)}
+                      checked={isAnonymous}
+                      onChange={(e) => setIsAnonymous(e.target.checked)}
                     />
-                    <label htmlFor="identity-toggle">{!isAnonymous ? 'Show my name' : 'Send anonymously'}</label>
-                    <span className="toggle-slider"></span>
+                    <label htmlFor="identity-toggle">{isAnonymous ? 'Anonymous (name hidden)' : 'Identified (name visible)'}</label>
+                    <span
+                      className="toggle-slider"
+                      role="switch"
+                      aria-checked={isAnonymous}
+                      aria-label="Toggle anonymous feedback"
+                      tabIndex={0}
+                      onClick={() => setIsAnonymous((prev) => !prev)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          setIsAnonymous((prev) => !prev);
+                        }
+                      }}
+                    ></span>
                   </div>
                 </div>
 
@@ -692,6 +794,15 @@ const StudentDashboard = () => {
                     <p className="metric-value">{currentUser?.role || 'Student'}</p>
                   </div>
                   <p className="metric-description">Your account type</p>
+                </div>
+
+                <div className="analytics-card">
+                  <h3>Language</h3>
+                  <div className="metric">
+                    <p className="metric-label">Current Preference</p>
+                    <p className="metric-value">{searchLanguage.toUpperCase()}</p>
+                  </div>
+                  <p className="metric-description">Used in RAG search and study plan</p>
                 </div>
               </div>
 

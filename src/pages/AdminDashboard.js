@@ -5,6 +5,7 @@
  */
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import AnimatedBackground from '../components/AnimatedBackground';
 import { authAPI, usersAPI, feedbackAPI, studentFeedbackAPI, analyticsAPI, ragAPI } from '../services/api';
 import { handleError } from '../services/errorHandler';
@@ -31,18 +32,22 @@ const AdminDashboard = () => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('users');
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchLanguage, setSearchLanguage] = useState('auto');
   const [searchResults, setSearchResults] = useState([]);
   const [generatedAnswer, setGeneratedAnswer] = useState('');
   const [searching, setSearching] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [operationStatus, setOperationStatus] = useState('');
 
   // User data
   const [currentUser, setCurrentUser] = useState(null);
   const [userName, setUserName] = useState('');
   const [editName, setEditName] = useState('');
   const [selectedAvatar, setSelectedAvatar] = useState('male');
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [profileSaving, setProfileSaving] = useState(false);
   const [userFilter, setUserFilter] = useState('all');
 
   // Users from API
@@ -54,11 +59,18 @@ const AdminDashboard = () => {
 
   // Analytics from API
   const [analytics, setAnalytics] = useState(null);
+  const [languageUsage, setLanguageUsage] = useState([]);
 
   // PDFs from API
   const [pdfs, setPdfs] = useState([]);
   const [uploadingPDF, setUploadingPDF] = useState(false);
   const [indexingPDF, setIndexingPDF] = useState(null);
+
+  const getPreferenceStorageKey = (user) => {
+    const role = user?.role || 'admin';
+    const id = user?.id || 'current';
+    return `edurag_language_pref_${role}_${id}`;
+  };
 
   const getAvatarSrc = avatarSource;
   const handleAvatarError = imageFallbackHandler(AVATAR_PLACEHOLDER);
@@ -80,30 +92,38 @@ const AdminDashboard = () => {
       setUserName(user.name);
       setEditName(user.name);
       setSelectedAvatar(user.avatar || 'male');
+      const savedLanguage = localStorage.getItem(getPreferenceStorageKey(user));
+      if (savedLanguage) {
+        setSearchLanguage(savedLanguage);
+      }
 
       // Load all data independently — one failure must not block others
       const results = await Promise.allSettled([
         usersAPI.getAll(),
         feedbackAPI.getAll(),
         analyticsAPI.getSummary(),
+        analyticsAPI.getLanguageUsage(),
         ragAPI.getPDFs(),
         studentFeedbackAPI.getAll(),
       ]);
 
       if (results[0].status === 'fulfilled') setUsers(results[0].value || []);
-      else setOperationStatus('Unable to load users right now.');
+      else toast.error('Unable to load users right now.');
 
       if (results[1].status === 'fulfilled') setTeacherFeedback(results[1].value || []);
-      else setOperationStatus('Unable to load teacher feedback right now.');
+      else toast.error('Unable to load teacher feedback right now.');
 
       if (results[2].status === 'fulfilled') setAnalytics(results[2].value);
-      else setOperationStatus('Unable to load analytics right now.');
+      else toast.error('Unable to load analytics right now.');
 
-      if (results[3].status === 'fulfilled') setPdfs(results[3].value || []);
-      else setOperationStatus('Unable to load PDFs right now.');
+      if (results[3].status === 'fulfilled') setLanguageUsage(results[3].value || []);
+      else setLanguageUsage([]);
 
-      if (results[4].status === 'fulfilled') setStudentFeedbackList(results[4].value || []);
-      else setOperationStatus('Unable to load student feedback right now.');
+      if (results[4].status === 'fulfilled') setPdfs(results[4].value || []);
+      else toast.error('Unable to load PDFs right now.');
+
+      if (results[5].status === 'fulfilled') setStudentFeedbackList(results[5].value || []);
+      else toast.error('Unable to load student feedback right now.');
     } catch (error) {
       handleError(error, 'Failed to load dashboard data.');
     } finally {
@@ -115,12 +135,12 @@ const AdminDashboard = () => {
     if (!searchQuery.trim()) return;
     setSearching(true);
     try {
-      const results = await ragAPI.search(searchQuery);
+      const results = await ragAPI.search(searchQuery, searchLanguage);
       setSearchResults(results.results || []);
       setGeneratedAnswer(results.generated_answer || '');
-      setOperationStatus(`Search complete: ${results.total_results || 0} matches.`);
+      toast.success(`Search complete: ${results.total_results || 0} matches. Language: ${(results.language || searchLanguage).toUpperCase()}`);
     } catch (error) {
-      setOperationStatus('Search failed. Please retry.');
+      toast.error('Search failed. Please retry.');
       handleError(error, 'Search failed.');
     } finally {
       setSearching(false);
@@ -138,7 +158,7 @@ const AdminDashboard = () => {
       setUsers(users.map(user =>
         user.id === userId ? { ...user, role: newRole } : user
       ));
-      setOperationStatus(`Role updated to ${newRole}.`);
+      toast.success(`Role updated to ${newRole}.`);
     } catch (error) {
       handleError(error, 'Failed to update role.');
     }
@@ -149,7 +169,7 @@ const AdminDashboard = () => {
       try {
         await usersAPI.delete(userId);
         setUsers(users.filter(user => user.id !== userId));
-        setOperationStatus('User deleted successfully.');
+        toast.success('User deleted successfully.');
       } catch (error) {
         handleError(error, 'Failed to delete user.');
       }
@@ -161,7 +181,7 @@ const AdminDashboard = () => {
       await feedbackAPI.respond(feedbackId, response);
       const feedback = await feedbackAPI.getAll();
       setTeacherFeedback(feedback);
-      setOperationStatus('Feedback response sent.');
+      toast.success('Feedback response sent.');
     } catch (error) {
       handleError(error, 'Failed to send response.');
     }
@@ -191,17 +211,30 @@ const AdminDashboard = () => {
     { name: 'Indexed', value: analytics?.indexed_pdfs || 0 },
   ];
 
+  useEffect(() => {
+    if (!currentUser) return;
+    localStorage.setItem(getPreferenceStorageKey(currentUser), searchLanguage);
+  }, [currentUser, searchLanguage]);
+
+  const totalLanguageQueries = languageUsage.reduce((sum, item) => sum + (item.count || 0), 0);
+  const languagePercent = (language) => {
+    if (!totalLanguageQueries) return '--';
+    const match = languageUsage.find((item) => (item.language || '').toLowerCase() === language);
+    if (!match) return '0%';
+    return `${Math.round((match.count / totalLanguageQueries) * 100)}%`;
+  };
+
   const handleUploadPDF = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
     setUploadingPDF(true);
     try {
       await ragAPI.uploadPDF(file);
-      setOperationStatus(`Uploaded: ${file.name}. Click Index to make it searchable.`);
+      toast.success(`Uploaded: ${file.name}. Click Index to make it searchable.`);
       const pdfList = await ragAPI.getPDFs();
       setPdfs(pdfList);
     } catch (error) {
-      setOperationStatus('Upload failed: ' + error.message);
+      toast.error('Upload failed: ' + error.message);
     } finally {
       setUploadingPDF(false);
       e.target.value = '';
@@ -212,11 +245,11 @@ const AdminDashboard = () => {
     setIndexingPDF(pdfId);
     try {
       const result = await ragAPI.indexPDF(pdfId);
-      setOperationStatus(result.message || 'PDF indexed successfully.');
+      toast.success(result.message || 'PDF indexed successfully.');
       const pdfList = await ragAPI.getPDFs();
       setPdfs(pdfList);
     } catch (error) {
-      setOperationStatus('Indexing failed: ' + error.message);
+      toast.error('Indexing failed: ' + error.message);
     } finally {
       setIndexingPDF(null);
     }
@@ -227,9 +260,9 @@ const AdminDashboard = () => {
     try {
       await ragAPI.deletePDF(pdfId);
       setPdfs(pdfs.filter(p => p.id !== pdfId));
-      setOperationStatus(`Deleted: ${filename}`);
+      toast.success(`Deleted: ${filename}`);
     } catch (error) {
-      setOperationStatus('Delete failed: ' + error.message);
+      toast.error('Delete failed: ' + error.message);
     }
   };
 
@@ -337,7 +370,12 @@ const AdminDashboard = () => {
           </div>
           <button
             className="edit-profile-btn"
-            onClick={() => setShowProfileModal(true)}
+            onClick={() => {
+              setCurrentPassword('');
+              setNewPassword('');
+              setConfirmNewPassword('');
+              setShowProfileModal(true);
+            }}
           >
             Edit Profile
           </button>
@@ -384,33 +422,87 @@ const AdminDashboard = () => {
                   </button>
                 </div>
               </div>
+
+              <div className="form-group-modal">
+                <label>Current Password (optional)</label>
+                <input
+                  type="password"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  placeholder="Enter current password"
+                  className="profile-input"
+                />
+              </div>
+
+              <div className="form-group-modal">
+                <label>New Password (optional)</label>
+                <input
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="Minimum 6 characters"
+                  className="profile-input"
+                />
+              </div>
+
+              <div className="form-group-modal">
+                <label>Confirm New Password</label>
+                <input
+                  type="password"
+                  value={confirmNewPassword}
+                  onChange={(e) => setConfirmNewPassword(e.target.value)}
+                  placeholder="Re-enter new password"
+                  className="profile-input"
+                />
+              </div>
             </div>
 
             <div className="profile-modal-buttons">
               <button
                 className="save-profile-btn"
                 onClick={async () => {
+                  setProfileSaving(true);
                   try {
+                    if (newPassword || confirmNewPassword || currentPassword) {
+                      if (!currentPassword || !newPassword || !confirmNewPassword) {
+                        throw new Error('Fill all password fields to change password.');
+                      }
+                      if (newPassword !== confirmNewPassword) {
+                        throw new Error('New password and confirm password do not match.');
+                      }
+                      await authAPI.changePassword(currentPassword, newPassword);
+                    }
                     await usersAPI.update(currentUser.id, {
                       name: editName,
                       avatar: selectedAvatar
                     });
                     setUserName(editName);
                     setCurrentUser({ ...currentUser, name: editName, avatar: selectedAvatar });
+                    toast.success('Profile updated successfully.');
+                    setCurrentPassword('');
+                    setNewPassword('');
+                    setConfirmNewPassword('');
+                    setShowProfileModal(false);
                   } catch (err) {
                     handleError(err, 'Failed to update profile');
+                  } finally {
+                    setProfileSaving(false);
                   }
-                  setShowProfileModal(false);
                 }}
+                disabled={profileSaving}
               >
-                Save Changes
+                {profileSaving ? 'Saving...' : 'Save Changes'}
               </button>
               <button
                 className="cancel-profile-btn"
                 onClick={() => {
                   setEditName(userName);
+                  setCurrentPassword('');
+                  setNewPassword('');
+                  setConfirmNewPassword('');
                   setShowProfileModal(false);
                 }}
+                disabled={profileSaving}
               >
                 Cancel
               </button>
@@ -436,7 +528,7 @@ const AdminDashboard = () => {
         </header>
 
         <div className="content-area">
-          {operationStatus && <div className="operation-status">{operationStatus}</div>}
+
           {/* User Management Tab */}
           {activeTab === 'users' && (
             <section className="tab-content">
@@ -461,6 +553,8 @@ const AdminDashboard = () => {
                   <span className="stat-pill">👥 {users.length} Total</span>
                   <span className="stat-pill student">🎓 {users.filter(u => u.role === 'student').length} Students</span>
                   <span className="stat-pill teacher">👨‍🏫 {users.filter(u => u.role === 'teacher').length} Teachers</span>
+                  <span className="stat-pill">🟢 {users.filter(u => u.status === 'active').length} Active</span>
+                  <span className="stat-pill">🔴 {users.filter(u => u.status !== 'active').length} Inactive</span>
                 </div>
               </div>
 
@@ -603,7 +697,9 @@ const AdminDashboard = () => {
                       <div className="feedback-card-header">
                         <div className="feedback-sender">
                           <span className="sender-badge">
-                            {fb.is_anonymous ? '🕵️ Anonymous Student' : `👤 Student #${fb.sender_id || 'Unknown'}`}
+                            {fb.is_anonymous
+                              ? '🕵️ Anonymous Student'
+                              : `👤 ${fb.sender_name || `Student #${fb.sender_id || 'Unknown'}`} ${fb.sender_institution_id ? `(${fb.sender_institution_id})` : ''}`}
                           </span>
                         </div>
                         <span className="feedback-time">{new Date(fb.created_at).toLocaleDateString()}</span>
@@ -672,11 +768,15 @@ const AdminDashboard = () => {
 
                 <div className="language-selector">
                   <label>Language Preference:</label>
-                  <select defaultValue="english">
+                  <select value={searchLanguage} onChange={(e) => setSearchLanguage(e.target.value)}>
+                    <option value="auto">Auto Detect</option>
                     <option value="english">English</option>
                     <option value="hindi">Hindi</option>
                     <option value="hinglish">Hinglish</option>
                   </select>
+                  <p className="section-desc" style={{ marginTop: '0.5rem' }}>
+                    Current preference: <strong>{searchLanguage.toUpperCase()}</strong>
+                  </p>
                 </div>
 
                 <h3>📂 Search Scope</h3>
@@ -853,17 +953,17 @@ const AdminDashboard = () => {
                 <div className="lang-card">
                   <span className="lang-emoji">🇬🇧</span>
                   <p className="lang-name">English</p>
-                  <p className="lang-percent">--</p>
+                  <p className="lang-percent">{languagePercent('english')}</p>
                 </div>
                 <div className="lang-card">
                   <span className="lang-emoji">🇮🇳</span>
                   <p className="lang-name">Hindi</p>
-                  <p className="lang-percent">--</p>
+                  <p className="lang-percent">{languagePercent('hindi')}</p>
                 </div>
                 <div className="lang-card">
                   <span className="lang-emoji">🔀</span>
                   <p className="lang-name">Hinglish</p>
-                  <p className="lang-percent">--</p>
+                  <p className="lang-percent">{languagePercent('hinglish')}</p>
                 </div>
               </div>
               <h3>📉 Role Distribution Chart</h3>

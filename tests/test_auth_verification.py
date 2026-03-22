@@ -1,10 +1,19 @@
 from unittest.mock import MagicMock
+import pytest
 
 import _mock_setup as _ms
 import routers.auth as auth_router
 
 _client = _ms.client
 _mock_sb = _ms.mock_sb
+
+
+@pytest.fixture(autouse=True)
+def _reset():
+    _mock_sb.reset_mock()
+    _mock_sb.table.side_effect = None
+    _ms._main._ip_buckets.clear()
+    yield
 
 
 def _new_user():

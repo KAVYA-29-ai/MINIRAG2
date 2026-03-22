@@ -283,6 +283,109 @@ def _language_alignment_score(language: str, document_text: str) -> float:
     return 1.0 if has_latin else 0.3
 
 
+ROMANIZED_HINDI_WORDS = {
+    "hai", "hain", "nahi", "kyu", "kyun", "kya", "kaise", "kar", "karo", "karta", "karte",
+    "mera", "meri", "hum", "aap", "tum", "samjhao", "samjha", "acha", "accha", "bahut",
+    "thoda", "yaar", "please", "jaldi", "padho", "padhna", "sahi", "galat", "ka", "ki", "ke",
+}
+
+
+def detect_language(text: str) -> str:
+    """Detect whether user text is English, Hindi, or Hinglish."""
+    raw = text or ""
+    if not raw.strip():
+        return "english"
+
+    has_devanagari = bool(re.search(r"[\u0900-\u097F]", raw))
+    has_latin = bool(re.search(r"[A-Za-z]", raw))
+
+    if has_devanagari and has_latin:
+        return "hinglish"
+    if has_devanagari:
+        return "hindi"
+
+    tokens = re.findall(r"[a-zA-Z']+", raw.lower())
+    romanized_hits = sum(1 for token in tokens if token in ROMANIZED_HINDI_WORDS)
+    if romanized_hits >= 2:
+        return "hinglish"
+    if romanized_hits == 1 and len(tokens) <= 4:
+        return "hinglish"
+    return "english"
+
+
+def _resolve_language(requested_language: str, text_hint: str) -> str:
+    """Resolve final language; use auto detection when requested."""
+    if (requested_language or "").lower() == "auto":
+        return detect_language(text_hint)
+    return (requested_language or "english").lower()
+
+
+def _fallback_study_plan(query_text: str, language: str, retrieved_results: list) -> str:
+    """Build a deterministic study plan when model generation is unavailable."""
+    lang = (language or "english").lower()
+    source_names = [r.get("source") for r in (retrieved_results or []) if r.get("source")]
+    top_sources = ", ".join(dict.fromkeys(source_names)) if source_names else "your uploaded notes"
+
+    if lang == "hindi":
+        return (
+            f"सीखने का लक्ष्य: {query_text} को 7 दिनों में अच्छे से समझना।\n\n"
+            "दिन 1: बेसिक्स पढ़ें और 10 मुख्य शब्द लिखें।\n"
+            "दिन 2: कॉन्सेप्ट मैप बनाएं और उदाहरण देखें।\n"
+            "दिन 3: छोटे प्रश्न हल करें (20-30 मिनट)।\n"
+            "दिन 4: कठिन टॉपिक्स दोबारा पढ़ें और नोट्स सुधारें।\n"
+            "दिन 5: मिक्स प्रैक्टिस सेट करें और गलतियां चिन्हित करें।\n"
+            "दिन 6: 30 मिनट का रिविज़न टेस्ट लें।\n"
+            "दिन 7: पूरे हफ्ते का रिविज़न + कमजोर भाग दोहराएं।\n\n"
+            "रिविज़न प्रश्न:\n"
+            "1) सबसे महत्वपूर्ण 3 कॉन्सेप्ट क्या हैं?\n"
+            "2) इस टॉपिक में आम गलती क्या होती है?\n"
+            "3) एक रियल-वर्ल्ड उदाहरण दें।\n"
+            "4) कौन सा भाग अभी भी कठिन लग रहा है?\n"
+            "5) अगले हफ्ते की प्रैक्टिस योजना क्या होगी?\n\n"
+            "बचने योग्य गलतियां: बिना रिविज़न पढ़ना, केवल रटना, और बिना प्रश्न हल किए आगे बढ़ना।\n"
+            f"Sources: {top_sources}"
+        )
+
+    if lang == "hinglish":
+        return (
+            f"Learning Goal: 7 days me {query_text} ko confidently samajhna.\n\n"
+            "Day 1: Basics revise karo aur 10 key terms note karo.\n"
+            "Day 2: Concept map banao + examples dekhkar link samjho.\n"
+            "Day 3: Short practice questions solve karo (20-30 min).\n"
+            "Day 4: Weak topics pe focus karo aur notes improve karo.\n"
+            "Day 5: Mixed practice set lagao, mistakes track karo.\n"
+            "Day 6: 30-min revision test do aur score analyze karo.\n"
+            "Day 7: Full revision + weak areas ka final recap.\n\n"
+            "Revision Questions:\n"
+            "1) Top 3 core concepts kaunse hain?\n"
+            "2) Is topic me common galti kya hoti hai?\n"
+            "3) Ek real-life example do.\n"
+            "4) Kaunsa part abhi unclear hai?\n"
+            "5) Next week ka improvement plan kya hoga?\n\n"
+            "Common Mistakes: Sirf reading karna, no revision, aur practice skip karna.\n"
+            f"Sources: {top_sources}"
+        )
+
+    return (
+        f"Learning Goal: Build strong understanding of {query_text} in 7 days.\n\n"
+        "Day 1: Review fundamentals and list 10 key terms.\n"
+        "Day 2: Build a concept map and connect examples.\n"
+        "Day 3: Solve short practice questions (20-30 minutes).\n"
+        "Day 4: Revisit weak topics and improve notes.\n"
+        "Day 5: Attempt mixed practice and log mistakes.\n"
+        "Day 6: Take a 30-minute revision quiz and analyze errors.\n"
+        "Day 7: Final revision and weak-area recap.\n\n"
+        "Revision Questions:\n"
+        "1) What are the top 3 core concepts?\n"
+        "2) What is a common mistake in this topic?\n"
+        "3) Give one real-world example.\n"
+        "4) Which subtopic still feels unclear?\n"
+        "5) What will your next-week practice plan be?\n\n"
+        "Common Mistakes: Passive reading, skipping revision, and avoiding practice sets.\n"
+        f"Sources: {top_sources}"
+    )
+
+
 def _generate_rag_answer(client, user_query: str, retrieved_results: list, language: str = "english"):
     """
     Generate an answer to the user query using retrieved context and Gemini models.
@@ -331,7 +434,14 @@ def _generate_rag_answer(client, user_query: str, retrieved_results: list, langu
             continue
 
     # If both models fail, construct a basic answer from chunks
-    fallback_text = f"Here is what I found about \"{user_query}\":\n\n"
+    effective_language = (language or "english").lower()
+    if effective_language == "hindi":
+        fallback_text = f"\"{user_query}\" के बारे में मुझे यह मिला:\n\n"
+    elif effective_language == "hinglish":
+        fallback_text = f"\"{user_query}\" ke baare me mujhe ye mila:\n\n"
+    else:
+        fallback_text = f"Here is what I found about \"{user_query}\":\n\n"
+
     for idx, result in enumerate(retrieved_results[:3], 1):
         fallback_text += f"{idx}. {result['content'][:300]}...\n\n"
     fallback_text += "Sources: " + ", ".join(
@@ -352,6 +462,7 @@ async def search_documents(
     gemini_client = _get_gemini_client()
     retrieval_mode = "keyword"
     used_multimodal = False
+    effective_language = _resolve_language(query.language, query.query)
 
     try:
         sb = get_supabase()
@@ -392,7 +503,7 @@ async def search_documents(
                     if chunk:
                         lexical = _token_overlap_score(query.query, chunk.get("content", ""))
                         phrase = _phrase_match_score(query.query, chunk.get("content", ""))
-                        language_bonus = _language_alignment_score(query.language, chunk.get("content", ""))
+                        language_bonus = _language_alignment_score(effective_language, chunk.get("content", ""))
                         blended_score = (0.68 * similarity) + (0.18 * lexical) + (0.08 * phrase) + (0.06 * language_bonus)
                         ranked.append((blended_score, chunk, chunk_vector))
 
@@ -440,7 +551,7 @@ async def search_documents(
         if not results:
             generated_answer = f"No relevant results found for \"{query.query}\". The indexed PDFs may not contain information on this topic. Try a different query or ask your teacher to upload relevant course materials."
         else:
-            generated_answer = _generate_rag_answer(gemini_client, query.query, results, query.language)
+            generated_answer = _generate_rag_answer(gemini_client, query.query, results, effective_language)
         response_time = int((time.time() - start_time) * 1000)
 
         # Log search history
@@ -448,7 +559,7 @@ async def search_documents(
             sb.table("search_history").insert({
                 "user_id": current_user.get("id"),
                 "query": query.query,
-                "language": query.language,
+                "language": effective_language,
                 "results_count": len(results),
                 "response_time_ms": response_time,
             }).execute()
@@ -457,6 +568,8 @@ async def search_documents(
 
         return {
             "query": query.query,
+            "language": effective_language,
+            "language_requested": query.language,
             "results": results,
             "total_results": len(results),
             "response_time_ms": response_time,
@@ -608,18 +721,17 @@ async def generate_study_plan(
         }
 
     client = _get_gemini_client()
-    if not client:
-        raise HTTPException(status_code=503, detail="Gemini client is not configured")
-
     compact_context = "\n\n".join(
         f"Source: {r.get('source')} Page {r.get('page_number')}\n{r.get('content', '')[:500]}"
         for r in retrieved_results[:5]
     )
 
+    effective_language = _resolve_language(query.language, query.query)
+
     language_instruction = {
         "hindi": "Provide the study plan in Hindi.",
         "hinglish": "Provide the study plan in Hinglish.",
-    }.get((query.language or "english").lower(), "Provide the study plan in English.")
+    }.get(effective_language, "Provide the study plan in English.")
 
     prompt = (
         "You are an educational AI mentor. Build a 7-day actionable study plan.\n"
@@ -630,30 +742,38 @@ async def generate_study_plan(
         f"Context:\n{compact_context}"
     )
 
-    for model in [GENERATION_MODEL, GENERATION_MODEL_FALLBACK]:
-        try:
-            response = client.models.generate_content(model=model, contents=prompt)
-            plan_text = (response.text or "").strip()
-            if plan_text:
-                try:
-                    sb.table("analytics_events").insert({
-                        "user_id": current_user.get("id"),
-                        "event_type": "study_plan_generated",
-                        "event_payload": json.dumps({"query": query.query, "language": query.language}),
-                    }).execute()
-                except Exception as exc:
-                    logger.warning("Failed to log study plan event: %s", exc)
+    if client:
+        for model in [GENERATION_MODEL, GENERATION_MODEL_FALLBACK]:
+            try:
+                response = client.models.generate_content(model=model, contents=prompt)
+                plan_text = (response.text or "").strip()
+                if plan_text:
+                    try:
+                        sb.table("analytics_events").insert({
+                            "user_id": current_user.get("id"),
+                            "event_type": "study_plan_generated",
+                            "event_payload": json.dumps({"query": query.query, "language": effective_language}),
+                        }).execute()
+                    except Exception as exc:
+                        logger.warning("Failed to log study plan event: %s", exc)
 
-                return {
-                    "query": query.query,
-                    "language": query.language,
-                    "study_plan": plan_text,
-                    "sources_used": len(retrieved_results[:5]),
-                }
-        except Exception as exc:
-            logger.warning("Study plan generation failed with %s: %s", model, exc)
+                    return {
+                        "query": query.query,
+                        "language": effective_language,
+                        "study_plan": plan_text,
+                        "sources_used": len(retrieved_results[:5]),
+                    }
+            except Exception as exc:
+                logger.warning("Study plan generation failed with %s: %s", model, exc)
 
-    raise HTTPException(status_code=500, detail="Failed to generate study plan")
+    # Deterministic fallback so plan generation does not fail when model is unavailable.
+    return {
+        "query": query.query,
+        "language": effective_language,
+        "study_plan": _fallback_study_plan(query.query, effective_language, retrieved_results),
+        "sources_used": len(retrieved_results[:5]),
+        "fallback": True,
+    }
 
 @router.post("/upload-pdf")
 async def upload_pdf(

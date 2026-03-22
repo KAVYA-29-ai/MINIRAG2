@@ -355,6 +355,31 @@ class _StorageClient:
         return r.json()
 
 
+class _AuthClient:
+    """Minimal Supabase Auth client."""
+
+    def __init__(self, url: str, headers: dict):
+        self._url = f"{url}/auth/v1"
+        self._headers = headers
+
+    def reset_password_email(self, email: str, options: dict | None = None):
+        params = {}
+        redirect_to = (options or {}).get("redirect_to")
+        if redirect_to:
+            params["redirect_to"] = redirect_to
+
+        r = httpx.post(
+            f"{self._url}/recover",
+            headers={**self._headers, "Content-Type": "application/json"},
+            params=params,
+            json={"email": email},
+            timeout=_TIMEOUT,
+        )
+        if r.status_code >= 400:
+            raise RuntimeError(f"Auth recover error {r.status_code}: {r.text}")
+        return r.json() if r.content else {}
+
+
 # ---- Main client -----------------------------------------------------------
 
 class SupabaseLiteClient:
@@ -370,6 +395,7 @@ class SupabaseLiteClient:
             "Content-Profile": "public",
         }
         self.storage = _StorageClient(self._url, self._headers)
+        self.auth = _AuthClient(self._url, self._headers)
 
     def table(self, name: str) -> _QueryBuilder:
         return _QueryBuilder(self._url, self._headers, name)

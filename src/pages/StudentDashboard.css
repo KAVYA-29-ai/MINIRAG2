@@ -491,10 +491,20 @@
   display: inline-block;
   font-size: 0.8rem;
   padding: 0.3rem 0.8rem;
-  background: rgba(34, 197, 94, 0.15);
-  color: #22c55e;
+  background: rgba(148, 163, 184, 0.15);
+  color: rgba(226, 232, 240, 0.9);
   border-radius: 20px;
   margin-top: 0.5rem;
+}
+
+.buddy-status.active {
+  background: rgba(34, 197, 94, 0.15);
+  color: #22c55e;
+}
+
+.buddy-status.inactive {
+  background: rgba(239, 68, 68, 0.14);
+  color: #f87171;
 }
 
 /* Feedback Section */
@@ -857,6 +867,14 @@
 .cancel-profile-btn:hover {
   background: rgba(148, 163, 184, 0.15);
   border-color: rgba(148, 163, 184, 0.3);
+}
+
+.save-profile-btn:disabled,
+.cancel-profile-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
 }
 
 /* Scrollbar Styling */

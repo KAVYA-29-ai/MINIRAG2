@@ -1,6 +1,6 @@
 
 
-# 🎓 EduRag - AI-Powered Educational RAG Platform 
+# 🎓 EduRag - AI-Powered Educational RAG Platform
 
 <p align="center">
   <strong>Retrieval Augmented Generation (RAG) platform for modern education — powered by Gemini AI & Supabase</strong>
@@ -13,6 +13,7 @@
   <img src="https://img.shields.io/badge/Supabase-100%25-3ECF8E?style=for-the-badge&logo=supabase&logoColor=white" alt="Supabase" />
   <img src="https://img.shields.io/badge/Vercel-Deployed-000000?style=for-the-badge&logo=vercel&logoColor=white" alt="Vercel" />
   <img src="https://img.shields.io/github/workflow/status/KAVYA-29-ai/MINIRAG2/CI?label=build&style=for-the-badge" alt="Build Status" />
+   <img src="https://img.shields.io/badge/coverage-80%25-green?style=for-the-badge" alt="Coverage" />
   <img src="https://img.shields.io/github/license/KAVYA-29-ai/MINIRAG2?style=for-the-badge" alt="License" />
 </p>
 
@@ -48,6 +49,12 @@ See the [docs/SETUP.md](docs/SETUP.md) for local setup and [docs/API.md](docs/AP
 - **100% Supabase** — all data (users, PDFs, embeddings, analytics) stored in Supabase PostgreSQL + Storage. Zero local storage.
 - **Fully Serverless** — deployed on Vercel (React static + FastAPI serverless function). No separate backend server needed.
 - **Gemini Multimodal RAG** — semantic search with vector embeddings, AI-generated answers with source citations.
+
+## 🧩 Unique Features
+
+- **Adaptive Study Plan Generator**: Turn any topic into a practical 7-day learning plan with daily goals, revision prompts, and common mistakes to avoid.
+- **Hinglish-Aware Learning Experience**: Supports English, Hindi, and Hinglish responses with auto-detection for mixed-language student queries.
+- **Peer Discovery (Buddies)**: Students can discover classmates and learning peers, making collaboration easier beyond search.
 
 ---
 
@@ -253,6 +260,30 @@ cd ..
 npm start                                            # React on :3000
 cd backend && uvicorn main:app --reload --port 8000  # API on :8000
 ```
+
+---
+
+## 🧪 Testing & CI
+
+### Backend tests (local)
+
+```bash
+pytest -v
+```
+
+### Frontend tests (local)
+
+```bash
+npm run test:ci
+```
+
+### Backend tests in CI (with coverage)
+
+```bash
+pytest tests/ -v --cov=backend --cov-report=xml
+```
+
+Note: the repository uses `pytest.ini` at root with `testpaths = tests` and `python_files = test_*.py`.
 
 ---
 
